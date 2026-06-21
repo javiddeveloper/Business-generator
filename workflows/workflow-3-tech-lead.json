@@ -7,13 +7,13 @@
           "interval": [
             {
               "field": "minutes",
-              "minutesInterval": 5
+              "minutesInterval": 10
             }
           ]
         }
       },
       "id": "2600b191-6b86-4c78-9c78-d0cf0cb00ed9",
-      "name": "Schedule: poll ریویو",
+      "name": "Schedule: fallback poll (10m)",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
@@ -33,10 +33,37 @@
         240,
         0
       ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tech-lead-review",
+        "responseMode": "onReceived",
+        "responseData": "firstEntryJson"
+      },
+      "id": "c7e2a1f0-3b5d-4e8a-9f6c-0d1e2a3b4c5d",
+      "name": "Webhook: trigger ریویو",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -120
+      ]
     }
   ],
   "connections": {
-    "Schedule: poll ریویو": {
+    "Webhook: trigger ریویو": {
+      "main": [
+        [
+          {
+            "node": "Tech Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule: fallback poll (10m)": {
       "main": [
         [
           {
