@@ -1,0 +1,21 @@
+services:
+  n8n:
+    image: n8nio/n8n:latest          # همان image موجود (بدون دانلود دوباره)
+    container_name: startup-n8n
+    restart: unless-stopped
+    ports:
+      - "5679:5678"                  # همان پورتی که الان باهاش کار می‌کنی
+    # کلیدها از این فایل خوانده می‌شوند (Trello/Bale/Gemini/Anthropic/GitHub)
+    env_file:
+      - ./secrets.env
+    environment:
+      - N8N_RUNNERS_ENABLED=true     # اجازه‌ی Code node و helpers
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false   # اجازه‌ی {{$env...}} در نودها (کلید اصلی!)
+      - N8N_RUNNERS_TASK_TIMEOUT=1800        # سقف زمان Code node = ۳۰ دقیقه (Claude کند است)
+      - GENERIC_TIMEZONE=Asia/Tehran
+    # تا کانتینر بتواند به Ollama روی خودِ سیستم وصل شود
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # همان دیتای فعلی n8n-lab → ورک‌فلوهای import‌شده حفظ می‌شوند
+      - /Users/mac/n8n-lab/data:/home/node/.n8n

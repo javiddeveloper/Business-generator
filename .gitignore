@@ -1,0 +1,9 @@
+# کلیدها — هرگز در گیت commit نکن
+secrets.env
+
+# macOS
+.DS_Store
+__MACOSX/
+
+# Node
+node_modules/
