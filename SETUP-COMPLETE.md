@@ -1,51 +1,51 @@
-# استارتاپ خودگردان با N8N — راهنمای کامل ستاپ از صفر
+# Autonomous Startup with N8N — Full Setup Guide from Scratch
 
-این سند تمام چیزی است که برای راه‌اندازی سیستم از صفر لازم داری. سیستم یک «تیم نرم‌افزاری مجازی» است: تو در پیام‌رسان **بله** ایده می‌دهی، و سه ورک‌فلو در **N8N** نقش‌های Product Owner، Developer و Tech Lead را بازی می‌کنند و کد را در **GitHub** می‌نویسند، تست می‌گیرند، PR می‌زنند و ریویو می‌کنند. کل کار فکری روی **Claude** (از طریق اشتراک Pro و یک پل محلی) انجام می‌شود — بدون هیچ توکن API پولی.
+This document is everything you need to set up the system from scratch. The system is a "virtual software team": you pitch an idea in the **Bale** messenger, and three workflows in **N8N** play the roles of Product Owner, Developer, and Tech Lead — they write the code on **GitHub**, run tests, open PRs, and review them. All the thinking work runs on **Claude** (via a Pro subscription and a local bridge) — without any paid API token.
 
-فهرست:
-- بخش ۱: توکن‌ها و کلیدهایی که باید جمع کنی
-- بخش ۲: نصب پیش‌نیازها
-- بخش ۳: تنظیم فلوها و نحوه‌ی استفاده
-- بخش ۴: مستند فنی — دقیقاً پشت فلوها چه می‌گذرد
+Contents:
+- Section 1: Tokens and keys you need to gather
+- Section 2: Installing prerequisites
+- Section 3: Configuring the flows and how to use them
+- Section 4: Technical docs — exactly what happens behind the flows
 
 ---
 
-## بخش ۱ — توکن‌ها و کلیدهایی که باید جمع کنی
+## Section 1 — Tokens and Keys You Need to Gather
 
-همه‌ی این مقادیر در یک فایل `secrets.env` کنار پروژه ذخیره می‌شوند. **این فایل را هرگز در گیت commit نکن.**
+All of these values are stored in a single `secrets.env` file next to the project. **Never commit this file to git.**
 
-| کلید | از کجا | توضیح |
+| Key | Where from | Description |
 |------|--------|-------|
-| `BALE_BOT_TOKEN` | ربات BotFather در بله | یک ربات بساز (`/newbot`)، توکن را بردار |
-| `OWNER_CHAT` | متد getUpdates بله | chat id خودت (پایین توضیح داده شده) |
+| `BALE_BOT_TOKEN` | BotFather bot in Bale | Create a bot (`/newbot`), grab the token |
+| `OWNER_CHAT` | Bale getUpdates method | your own chat id (explained below) |
 | `TRELLO_KEY` | trello.com/app-key | API key |
-| `TRELLO_TOKEN` | لینک authorize (پایین) | توکن دسترسی نوشتن (نه Secret) |
-| `TRELLO_BOARD_ID` | URL برد | شناسه‌ی برد |
-| `TRELLO_LIST_TODO` و ۴ لیست دیگر | API لیست‌ها | شناسه‌ی پنج ستون |
-| `GITHUB_TOKEN` | GitHub → Tokens (classic) | classic token با scope `repo` |
+| `TRELLO_TOKEN` | authorize link (below) | write-access token (not the Secret) |
+| `TRELLO_BOARD_ID` | board URL | board id |
+| `TRELLO_LIST_TODO` and 4 other lists | lists API | the ids of the five columns |
+| `GITHUB_TOKEN` | GitHub → Tokens (classic) | classic token with `repo` scope |
 
-> **توجه:** دیگر به `GEMINI_API_KEY` و `ANTHROPIC_API_KEY` نیازی نیست — کل لایه‌ی فکری روی Claude Code (اشتراک Pro) از طریق پل محلی کار می‌کند.
+> **Note:** You no longer need `GEMINI_API_KEY` or `ANTHROPIC_API_KEY` — the entire thinking layer runs on Claude Code (Pro subscription) via the local bridge.
 
-### گرفتن توکن بله و chat id
-1. در بله، ربات **BotFather** را باز کن → `/newbot` → نام و یوزرنیم بده → توکن را بردار → `BALE_BOT_TOKEN`.
-2. به ربات خودت یک پیام بفرست (مثلاً `/start`).
-3. این آدرس را در مرورگر باز کن (توکن خودت را بگذار): `https://tapi.bale.ai/bot<TOKEN>/getUpdates`
-4. در پاسخ JSON دنبال `chat.id` بگرد → `OWNER_CHAT`.
+### Getting the Bale token and chat id
+1. In Bale, open the **BotFather** bot → `/newbot` → give a name and username → grab the token → `BALE_BOT_TOKEN`.
+2. Send a message to your own bot (e.g. `/start`).
+3. Open this address in a browser (insert your own token): `https://tapi.bale.ai/bot<TOKEN>/getUpdates`
+4. In the JSON response, look for `chat.id` → `OWNER_CHAT`.
 
-### گرفتن توکن و شناسه‌های Trello
-1. یک برد بساز با **پنج لیست**: `To Do`، `In Progress`، `Waiting API`، `In Review`، `Owner Review`.
-2. `TRELLO_KEY` را از <https://trello.com/app-key> بردار.
-3. توکن را با این آدرس بساز (Key خودت را بگذار) و Allow بزن:
+### Getting the Trello token and ids
+1. Create a board with **five lists**: `To Do`, `In Progress`, `Waiting API`, `In Review`, `Owner Review`.
+2. Grab `TRELLO_KEY` from <https://trello.com/app-key>.
+3. Create the token with this address (insert your own Key) and click Allow:
    `https://trello.com/1/authorize?expiration=never&scope=read,write&response_type=token&key=<KEY>`
-4. شناسه‌ی برد: برد را باز کن، شناسه‌ی کوتاه از URL (مثل `trello.com/b/<BOARD_ID>/...`).
-5. شناسه‌ی لیست‌ها: این آدرس را باز کن و id هر لیست را بردار:
+4. Board id: open the board, grab the short id from the URL (e.g. `trello.com/b/<BOARD_ID>/...`).
+5. List ids: open this address and grab the id of each list:
    `https://api.trello.com/1/boards/<BOARD_ID>/lists?fields=name,id&key=<KEY>&token=<TOKEN>`
 
-### گرفتن توکن GitHub
-GitHub → Settings → Developer settings → **Tokens (classic)** → Generate new token → فقط تیک **`repo`** → بساز → `GITHUB_TOKEN`.
-(توکن classic مطمئن‌تر از fine-grained است چون git push و Contents و PR را یکجا می‌دهد.)
+### Getting the GitHub token
+GitHub → Settings → Developer settings → **Tokens (classic)** → Generate new token → check only **`repo`** → create → `GITHUB_TOKEN`.
+(A classic token is more reliable than a fine-grained one because it grants git push, Contents, and PRs all at once.)
 
-### نمونه‌ی فایل `secrets.env`
+### Sample `secrets.env` file
 ```
 # Bale
 BALE_BOT_TOKEN=...
@@ -65,42 +65,42 @@ GITHUB_TOKEN=ghp_...
 
 ---
 
-## بخش ۲ — نصب پیش‌نیازها
+## Section 2 — Installing Prerequisites
 
-روی همان مک/سیستمی که N8N را اجرا می‌کنی:
+On the same Mac/system where you run N8N:
 
-### ۱) Docker
-Docker Desktop را نصب کن (docker.com). N8N داخل یک کانتینر اجرا می‌شود.
+### 1) Docker
+Install Docker Desktop (docker.com). N8N runs inside a container.
 
-### ۲) Node.js (نسخه ۱۸ به بالا)
-برای اجرای «پل Claude» لازم است.
+### 2) Node.js (version 18 or higher)
+Required to run the "Claude bridge".
 ```
-node -v        # باید ≥ 18 باشد
-# اگر نبود: brew install node  یا از nodejs.org
+node -v        # must be ≥ 18
+# if not: brew install node  or from nodejs.org
 ```
 
-### ۳) Claude Code (لایه‌ی فکری — رایگان با Pro)
+### 3) Claude Code (the thinking layer — free with Pro)
 ```
 npm install -g @anthropic-ai/claude-code@latest
-claude            # یک‌بار اجرا، بعد /login → «Log in with Claude account» (اشتراک Pro)
-claude -p "تست" --output-format json   # باید پاسخ بدهد
+claude            # run once, then /login → "Log in with Claude account" (Pro subscription)
+claude -p "test" --output-format json   # should respond
 ```
-> نیاز به اشتراک **Claude Pro/Max** داری. پلن رایگان Claude Code ندارد. این بخش جایگزین توکن API است.
+> You need a **Claude Pro/Max** subscription. The free plan has no Claude Code. This section replaces the API token.
 
 ---
 
-## بخش ۳ — تنظیم فلوها و نحوه‌ی استفاده
+## Section 3 — Configuring the Flows and How to Use Them
 
-### قدم ۱: فایل‌ها
-ساختار فولدر:
+### Step 1: Files
+Folder structure:
 ```
 ai-startup-n8n/
 ├── README.md
-├── SETUP-COMPLETE.md      (همین فایل)
+├── SETUP-COMPLETE.md      (this file)
 ├── docker-compose.yml
 ├── claude-bridge.js
-├── secrets.env            (کلیدها — در گیت commit نکن)
-├── stacks/                 (استک هر پلتفرم — قابل ویرایش توسط تو)
+├── secrets.env            (keys — do not commit to git)
+├── stacks/                 (per-platform stack — editable by you)
 │   ├── backend.md
 │   ├── frontend.md
 │   └── mobile.md
@@ -110,197 +110,197 @@ ai-startup-n8n/
     └── workflow-3-tech-lead.json
 ```
 
-> **استک قابل تنظیم:** تکنولوژی هر پلتفرم در `stacks/backend.md`، `stacks/frontend.md` و `stacks/mobile.md` تعریف شده. هر متنی که در این فایل‌ها بنویسی، عیناً به‌عنوان دستورالعمل به Developer/CI داده می‌شود. چون n8n نسخه‌ی ۲ اجازه‌ی `require('fs')` در Code node را نمی‌دهد، این فایل‌ها از طریق **`claude-bridge.js`** سرو می‌شوند: بریج روی مک یک مسیر `GET /stack/<track>` دارد که محتوای `stacks/<track>.md` (کنار خود `claude-bridge.js`) را برمی‌گرداند، و ورک‌فلوها با HTTP آن را می‌خوانند (`http://host.docker.internal:8787/stack/...`). برای تغییر استک (مثلاً موبایل از KMP به اندروید نِیتیو)، فقط همان فایل را ویرایش کن — چون هنگام اجرا خوانده می‌شود، نیازی به ری‌استارت N8N نیست (فقط `claude-bridge.js` باید در حال اجرا باشد). اگر فایلی نبود، به پیش‌فرض داخلی برمی‌گردد. نیازی به mount داکر یا تنظیم `NODE_FUNCTION_ALLOW_BUILTIN` نیست.
+> **Configurable stack:** the technology for each platform is defined in `stacks/backend.md`, `stacks/frontend.md`, and `stacks/mobile.md`. Whatever text you write in these files is passed verbatim as instructions to the Developer/CI. Because n8n v2 does not allow `require('fs')` in a Code node, these files are served via **`claude-bridge.js`**: the bridge on the Mac exposes a `GET /stack/<track>` route that returns the contents of `stacks/<track>.md` (next to `claude-bridge.js` itself), and the workflows read it over HTTP (`http://host.docker.internal:8787/stack/...`). To change the stack (e.g. switch mobile from KMP to native Android), just edit that file — since it's read at runtime, there's no need to restart N8N (only `claude-bridge.js` must be running). If a file is missing, it falls back to the built-in default. No Docker mount or `NODE_FUNCTION_ALLOW_BUILTIN` setting is needed.
 
-### قدم ۲: پل Claude را روشن کن (و روشن نگه‌دار)
-در یک ترمینال جدا:
+### Step 2: Start the Claude bridge (and keep it running)
+In a separate terminal:
 ```
-cd مسیر/پروژه
-node claude-bridge.js      # باید بگوید: Claude bridge روی http://localhost:8787 آماده است
+cd path/to/project
+node claude-bridge.js      # should say: Claude bridge ready on http://localhost:8787
 ```
-این پل یک سرور محلی است که شکل API آنتروپیک را تقلید می‌کند ولی پشت‌صحنه `claude -p` (اشتراک Pro) را صدا می‌زند. N8N از داخل داکر با `http://host.docker.internal:8787` به آن وصل می‌شود.
+This bridge is a local server that mimics the shape of the Anthropic API but, behind the scenes, calls `claude -p` (Pro subscription). N8N connects to it from inside Docker via `http://host.docker.internal:8787`.
 
-### قدم ۳: N8N را بالا بیاور
+### Step 3: Bring up N8N
 ```
 docker compose up -d
-docker exec startup-n8n printenv TRELLO_KEY   # باید کلید را چاپ کند (یعنی env بارگذاری شد)
+docker exec startup-n8n printenv TRELLO_KEY   # should print the key (means env was loaded)
 ```
-سپس برو به `http://localhost:5679`.
+Then go to `http://localhost:5679`.
 
-نکات مهم `docker-compose.yml` (همه از قبل تنظیم شده):
-- `env_file: secrets.env` → کلیدها به کانتینر تزریق می‌شوند.
-- `extra_hosts: host.docker.internal:host-gateway` → دسترسی به پل روی هاست.
-- `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` → اجازه‌ی استفاده از `$env` در نودها (بدون این، همه‌ی نودها خطای «access to env vars denied» می‌دهند).
-- `N8N_RUNNERS_TASK_TIMEOUT=1800` → سقف ۳۰ دقیقه برای Code nodeها (چون Claude کند است).
+Key points in `docker-compose.yml` (all preconfigured):
+- `env_file: secrets.env` → keys are injected into the container.
+- `extra_hosts: host.docker.internal:host-gateway` → access to the bridge on the host.
+- `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` → allows using `$env` in nodes (without this, every node throws an "access to env vars denied" error).
+- `N8N_RUNNERS_TASK_TIMEOUT=1800` → a 30-minute cap for Code nodes (because Claude is slow).
 
-### قدم ۴: ورک‌فلوها را Import و Active کن
-در N8N: منوی بالا → **Import from File** → هر سه فایل از پوشه‌ی `workflows/` → بعد هر سه را **Active** کن.
+### Step 4: Import and Activate the workflows
+In N8N: top menu → **Import from File** → all three files from the `workflows/` folder → then **Activate** all three.
 
-### قدم ۵: استفاده — پیام‌هایی که در بله می‌فرستی
+### Step 5: Usage — the messages you send in Bale
 
-**شروع پروژه‌ی جدید (فرمت ساختاریافته):**
+**Start a new project (structured format):**
 ```
-name: نام پروژه
+name: project name
 repo: https://github.com/USER/REPO
-link: https://reference.com   (اختیاری)
-idea: شرح کامل چیزی که می‌خوای ساخته بشه
+link: https://reference.com   (optional)
+idea: full description of what you want built
 ```
-- ریپو را خودت **از قبل خالی** روی گیت‌هاب بساز؛ سیستم خودش `main`+`develop`، ساختار مونوریپو و فایل CI را می‌سازد.
-- می‌توانی بگویی فقط سایت، فقط بکند، یا فقط موبایل — سیستم فقط همان بخش‌ها را تسک می‌زند و ستون‌ها را هوشمند انتخاب می‌کند.
+- Create the repo **empty in advance** on GitHub yourself; the system builds `main`+`develop`, the monorepo structure, and the CI file on its own.
+- You can say website only, backend only, or mobile only — the system tasks out only those parts and picks the columns intelligently.
 
-**گزارش باگ:** `fix: دکمه لاگین کار نمی‌کند`
-**قابلیت جدید:** `feature: اضافه کردن جستجو`
+**Bug report:** `fix: the login button doesn't work`
+**New feature:** `feature: add search`
 
-`fix:` و `feature:` به همان پروژه‌ی فعال یک تسک اضافه می‌کنند (برد پاک نمی‌شود).
+`fix:` and `feature:` add a task to the same active project (the board is not cleared).
 
-### چرخه‌ای که می‌بینی
-1. بله می‌گوید «در حال آماده‌سازی…» و بعد لیست تسک‌ها را می‌فرستد.
-2. کارت‌ها در Trello ظاهر می‌شوند.
-3. هر چند دقیقه یک تسک کد زده می‌شود، PR به `develop` باز می‌شود، و بله خبر می‌دهد «رفت برای ریویو».
-4. اگر تست‌ها (CI) سبز و کد درست بود، Tech Lead خودش PR را در `develop` **merge می‌کند** (squash)، شاخه‌ی تسک پاک می‌شود، کارت به Owner Review (یعنی Done) می‌رود و بله خبر می‌دهد «merge شد در develop».
-5. اگر merge خودکار به هر دلیلی نشد (مثلاً محدودیت branch protection)، بله خبر می‌دهد «تأیید شد ولی merge خودکار نشد» و تو دستی merge می‌کنی.
+### The cycle you'll see
+1. Bale says "Preparing…" and then sends the list of tasks.
+2. Cards appear in Trello.
+3. Every few minutes a task gets coded, a PR is opened against `develop`, and Bale reports "sent for review".
+4. If the tests (CI) are green and the code is correct, the Tech Lead **merges** the PR into `develop` itself (squash), the task branch is deleted, the card moves to Owner Review (i.e. Done), and Bale reports "merged into develop".
+5. If the automatic merge fails for any reason (e.g. branch protection), Bale reports "approved but auto-merge failed" and you merge manually.
 
 ---
 
-## بخش ۴ — مستند فنی: پشت فلوها چه می‌گذرد
+## Section 4 — Technical Docs: What Happens Behind the Flows
 
-### معماری کلی
+### Overall architecture
 ```
-بله (تو)  ──getUpdates──►  WF1 Product Owner ──► Trello (تسک‌ها) + GitHub (bootstrap ریپو)
+Bale (you)  ──getUpdates──►  WF1 Product Owner ──► Trello (tasks) + GitHub (bootstrap repo)
                                                          │
                                                          ▼
-                                   WF2 Developer ──► Claude (کد+تست) ──► GitHub (branch/commit/PR به develop)
+                                   WF2 Developer ──► Claude (code+tests) ──► GitHub (branch/commit/PR to develop)
                                                          │
                                                          ▼
-                                   WF3 Tech Lead ──► CI + کانفلیکت + ریویو ──► Trello + بله
+                                   WF3 Tech Lead ──► CI + conflict + review ──► Trello + Bale
                                                          │
                                                          ▼
-                                          merge خودکار به develop (squash)
+                                          auto-merge into develop (squash)
 ```
-چهار جزء بیرونی: **بله** (رابط تو)، **Trello** (تابلوی وضعیت/صف کار)، **GitHub** (کد + CI)، **پل Claude** (مغز). سه ورک‌فلو همگی روی **polling** کار می‌کنند (نه webhook) چون N8N روی localhost است و سرویس‌های بیرونی نمی‌توانند به آن webhook بزنند.
+Four external components: **Bale** (your interface), **Trello** (status board / work queue), **GitHub** (code + CI), and **the Claude bridge** (the brain). All three workflows run on **polling** (not webhooks) because N8N is on localhost and external services can't reach it with a webhook.
 
-### لایه‌ی مدل
-تمام تصمیم‌های فکری — تشخیص اعتبار ایده، شکستن به تسک، نوشتن کد و تست، نوشتن مستند، و ریویو — توسط Claude از طریق پل محلی انجام می‌شود. پل (`claude-bridge.js`) یک درخواست استایل‌آنتروپیک می‌گیرد، متنش را به `claude -p --output-format json` می‌دهد و پاسخ را دوباره در قالب `{content:[{text}]}` برمی‌گرداند. به این شکل نودهای N8N فکر می‌کنند با API آنتروپیک حرف می‌زنند، ولی در واقع اشتراک Pro خرج می‌شود.
+### The model layer
+All the thinking decisions — judging whether an idea is valid, breaking it into tasks, writing code and tests, writing docs, and reviewing — are made by Claude via the local bridge. The bridge (`claude-bridge.js`) takes an Anthropic-style request, feeds its text to `claude -p --output-format json`, and returns the response back in the `{content:[{text}]}` shape. This way the N8N nodes think they're talking to the Anthropic API, but in reality the Pro subscription is being spent.
 
-### نگه‌داری اطلاعات پروژه (Data model)
-چون هر پروژه ریپوی خودش را دارد و سه ورک‌فلو جدا هستند، اطلاعات پروژه در **توضیحات هر کارت Trello** ذخیره می‌شود؛ یک فوتر به این شکل:
+### Persisting project info (data model)
+Since each project has its own repo and the three workflows are separate, project info is stored in **the description of each Trello card**; a footer like this:
 ```
 ---
 repo: USER/REPO
-project: نام پروژه
-ref: لینک مرجع (اختیاری)
+project: project name
+ref: reference link (optional)
 ```
-WF2 و WF3 این فوتر را از کارت می‌خوانند تا بدانند روی کدام ریپو کار کنند. اسم هر کارت هم به شکل `[track][complexity] عنوان` است (track یکی از backend/frontend/mobile) که برای مسیریابی استفاده می‌شود.
+WF2 and WF3 read this footer from the card to know which repo to work on. Each card's name is also in the form `[track][complexity] title` (track is one of backend/frontend/mobile), which is used for routing.
 
-### ستون‌های Trello (وضعیت‌ها)
-- **To Do**: آماده‌ی توسعه.
-- **In Progress**: قفل موقت حین کدزدن (تا دوبار برداشته نشود).
-- **Waiting API**: تسک‌های frontend/mobile که منتظر آماده‌شدن مستند API از backend هستند. *اگر پروژه backend نداشته باشد، اصلاً از این ستون استفاده نمی‌شود.*
-- **In Review**: PR باز شده، منتظر بررسی Tech Lead.
-- **Owner Review**: تأییدشده و merge‌شده در develop (Done). اگر merge خودکار نشده باشد، یعنی منتظر merge دستی توست.
+### Trello columns (statuses)
+- **To Do**: ready for development.
+- **In Progress**: a temporary lock during coding (so it isn't picked up twice).
+- **Waiting API**: frontend/mobile tasks waiting for the backend's API docs to be ready. *If the project has no backend, this column is not used at all.*
+- **In Review**: PR opened, waiting for Tech Lead review.
+- **Owner Review**: approved and merged into develop (Done). If the auto-merge didn't happen, it means it's waiting for your manual merge.
 
-### WF1 — Product Owner (تریگر: هر ۱ دقیقه)
-1. **دریافت و تفکیک پیام**: با getUpdates پیام‌های جدید بله را می‌گیرد (offset را با static data نگه می‌دارد تا تکراری نشود). نوع پیام را تشخیص می‌دهد: `fix:`، `feature:`، یا ایده‌ی ساختاریافته. پیام‌های بدون کلیدِ `name:`/`repo:`/`idea:` نادیده گرفته می‌شوند.
-2. **Product Owner (منطق اصلی)**:
-   - برای `fix`/`feature`: ریپوی پروژه‌ی فعال را از کارت‌های موجود می‌خواند، با Claude یک تسک می‌سازد و به To Do اضافه می‌کند.
-   - برای ایده‌ی جدید:
-     - **گیت تک‌پروژه‌ای**: اگر برد تسک فعال دارد، ایده رد می‌شود (یک پروژه در هر زمان).
-     - **پاک‌سازی برد**: همه‌ی ستون‌ها خالی می‌شوند.
-     - **اعتبارسنجی**: Claude تشخیص می‌دهد ایده واقعی است یا متن تستی.
-     - **bootstrap ریپو**: مطمئن می‌شود `main` وجود دارد، ساختار مونوریپو (`backend/ frontend/ mobile/ docs/api/`) را می‌سازد، و فایل `.github/workflows/ci.yml` را **به‌صورت پویا با Claude بر اساس فایل‌های `stacks/`** تولید و کامیت می‌کند (build + test هر بخش؛ اگر تولید نشد، به CI پیش‌فرض داخلی برمی‌گردد). سپس برنچ `develop` را از `main` می‌سازد. در بله هم گزارش «CI راه‌اندازی شد» فرستاده می‌شود.
-     - **تولید تسک**: Claude ایده را به تسک‌های اتمیک (فقط بخش‌های لازم) می‌شکند، هرکدام با track و complexity و یک تسک تست برای هر بخش.
-     - **انتخاب هوشمند ستون**: اگر پروژه backend دارد → backend در To Do و بقیه در Waiting API. اگر backend ندارد → همه مستقیم در To Do.
-     - لیست تسک‌ها در بله فرستاده می‌شود.
-   - **دستورها**: `/start` یا `/help` راهنمای استفاده را می‌فرستد. `/exit` (یا `/stop`) خروج اضطراری است: همه‌ی کارت‌های برد پاک می‌شوند تا هر سه ورک‌فلو متوقف (idle) شوند و پروژه‌ی فعال کامل بایستد. `/report` گزارش لحظه‌ای به ازای هر تسک را همان‌جا می‌فرستد (همان منطق گزارش روزانه، ولی on-demand و برای همان چتی که درخواست داده).
-3. **گزارش روزانه** (تریگر کرون ۹ صبح): **به ازای هر تسک** گزارش می‌دهد — موضوع تسک، وضعیت و میزان پیشرفت، باگ‌هایی که داشته و این‌که چطور فیکس شده. منبع داده‌ها: نام/شرح کارت و کامنت‌های آن (کامنت‌های 🔴 باگ‌ها و 🛠️ فیکس‌ها را می‌شمارد). اگر گزارش طولانی شد، خودکار تکه‌تکه در بله فرستاده می‌شود.
+### WF1 — Product Owner (trigger: every 1 minute)
+1. **Receive and classify messages**: uses getUpdates to fetch new Bale messages (keeps the offset in static data so messages aren't reprocessed). Detects the message type: `fix:`, `feature:`, or a structured idea. Messages without a `name:`/`repo:`/`idea:` key are ignored.
+2. **Product Owner (core logic)**:
+   - For `fix`/`feature`: reads the active project's repo from the existing cards, creates a task with Claude, and adds it to To Do.
+   - For a new idea:
+     - **Single-project gate**: if the board has active tasks, the idea is rejected (one project at a time).
+     - **Board cleanup**: all columns are emptied.
+     - **Validation**: Claude judges whether the idea is real or just test text.
+     - **Repo bootstrap**: ensures `main` exists, builds the monorepo structure (`backend/ frontend/ mobile/ docs/api/`), and generates and commits the `.github/workflows/ci.yml` file **dynamically with Claude based on the `stacks/` files** (build + test per part; if generation fails, it falls back to the built-in default CI). Then it creates the `develop` branch from `main`. A "CI set up" report is also sent in Bale.
+     - **Task generation**: Claude breaks the idea into atomic tasks (only the needed parts), each with a track and complexity, plus one test task per part.
+     - **Smart column selection**: if the project has a backend → backend goes in To Do and the rest in Waiting API. If there's no backend → everything goes straight to To Do.
+     - The task list is sent in Bale.
+   - **Commands**: `/start` or `/help` sends the usage guide. `/exit` (or `/stop`) is the emergency exit: all board cards are cleared so all three workflows stop (idle) and the active project fully halts. `/report` sends a per-task on-demand report right there (the same logic as the daily report, but on-demand and for the chat that requested it).
+3. **Daily report** (cron trigger at 9 AM): reports **per task** — the task's topic, status and progress, the bugs it had, and how they were fixed. Data source: the card's name/description and its comments (it counts 🔴 bug comments and 🛠️ fix comments). If the report gets long, it's automatically split into chunks in Bale.
 
-### WF2 — Developer (تریگر: هر ۵ دقیقه)
-1. لیست To Do را می‌گیرد و **backend را اول** مرتب می‌کند؛ اولین کارت را برمی‌دارد و به In Progress می‌برد (قفل).
-   - **حالت رفع باگ**: اگر برنچ `task/<cardId>` از قبل وجود داشته باشد (یعنی کارت قبلاً ساخته شده و از ریویو/CI برگشته)، Developer وارد «حالت فیکس» می‌شود: آخرین کامنت‌های کارت Trello (لاگ خطا) و کد فعلیِ روی برنچ را می‌خواند و به Claude می‌گوید **به‌جای بازنویسی از صفر، باگ را رفع کند**. سپس روی همان برنچ کامیت و PR تازه باز می‌کند.
-2. ریپو و track را از کارت می‌خواند. برای frontend/mobile، مستند `docs/api/API.md` را از `develop` می‌خواند و در پرامپت تزریق می‌کند.
-3. **تولید کد**: Claude با دستورالعمل استک — که از `claude-bridge.js` با درخواست `GET /stack/<track>` خوانده می‌شود (محتوای `stacks/<track>.md`)، با fallback به پیش‌فرض داخلی اگر در دسترس نبود — به‌علاوه‌ی الزام «همه‌ی فایل‌ها زیر پوشه‌ی پکیج» و «حداقل ۳ unit test»، یک آرایه از فایل‌ها (`{path, content}`) برمی‌گرداند.
-4. **gitflow**: برنچ `task/<cardId>` را از **develop** می‌سازد، فایل‌ها را کامیت می‌کند، و یک **PR به develop** باز می‌کند.
-5. **مستند**: Claude یک مستند Markdown می‌سازد و در `docs/<track>/<cardId>.md` کامیت می‌کند. برای backend، علاوه بر آن مستند را در `docs/api/API.md` تجمیع می‌کند (همان که frontend/mobile می‌خوانند).
-6. **آزادسازی وابستگی**: بعد از اتمام آخرین تسک backend، کارت‌های Waiting API به To Do منتقل می‌شوند.
-7. کارت به In Review می‌رود و در بله نوتیف «رفت برای ریویو» می‌آید.
+### WF2 — Developer (trigger: every 5 minutes)
+1. Fetches the To Do list and sorts **backend first**; picks the first card and moves it to In Progress (lock).
+   - **Bug-fix mode**: if the branch `task/<cardId>` already exists (meaning the card was created before and came back from review/CI), the Developer enters "fix mode": it reads the card's latest Trello comments (the error log) and the current code on the branch, and tells Claude to **fix the bug rather than rewrite from scratch**. It then commits on the same branch and opens a fresh PR.
+2. Reads the repo and track from the card. For frontend/mobile, it reads the `docs/api/API.md` doc from `develop` and injects it into the prompt.
+3. **Code generation**: Claude — with the stack instructions read from `claude-bridge.js` via a `GET /stack/<track>` request (the contents of `stacks/<track>.md`), falling back to the built-in default if unavailable — plus the requirement "all files under the package folder" and "at least 3 unit tests", returns an array of files (`{path, content}`).
+4. **gitflow**: creates the `task/<cardId>` branch from **develop**, commits the files, and opens a **PR to develop**.
+5. **Docs**: Claude generates a Markdown doc and commits it to `docs/<track>/<cardId>.md`. For backend, it additionally consolidates the doc into `docs/api/API.md` (the same one frontend/mobile read).
+6. **Releasing dependencies**: after the last backend task finishes, the Waiting API cards are moved to To Do.
+7. The card moves to In Review and a "sent for review" notification arrives in Bale.
 
-### WF3 — Tech Lead (تریگر: هر ۵ دقیقه)
-برای هر کارت در In Review:
-1. PR متناظر را پیدا می‌کند: همه‌ی PRهای باز به develop را می‌گیرد و آن‌که `head.ref === task/<cardId>` است را برمی‌دارد (روش مقاوم؛ جایگزین فیلتر شکننده‌ی قبلی که گاهی PR را پیدا نمی‌کرد و ریویو انجام نمی‌شد).
-2. **کانفلیکت**: اگر PR با develop کانفلیکت دارد (`mergeable_state=dirty`) → نوتیف بله + بستن PR + **کامنت روی کارت Trello + لیبل قرمز «باگ»** + بازگشت کارت به To Do.
-3. **CI (گیت اجباری)**: هیچ PRی بدون تأیید CI ریویو یا merge نمی‌شود. وضعیت GitHub Actions روی آخرین کامیت خوانده می‌شود:
-   - هنوز هیچ چکی نیامده → این دور رد می‌شود (منتظر می‌ماند)؛ اگر PR بیش از ۲۰ دقیقه بدون CI ماند، در بله هشدار «CI اجرا نشد» می‌آید (ولی هرگز بدون CI تأیید/merge نمی‌شود).
-   - در حال اجرا → این دور رد می‌شود.
-   - رد شده (build یا test) → نوتیف بله + بستن PR + **لاگ خطا (از output و annotationهای چک‌های رد‌شده) به‌صورت کامنت در کارت Trello + لیبل قرمز** + بازگشت کارت به To Do برای فیکس.
-   - سبز → ادامه به ریویو.
-4. **ریویو کد**: Claude دیف را در برابر تسک و استاندارد استک می‌سنجد:
-   - `APPROVE` → ثبت review تأیید + **merge خودکار PR در develop (squash)** + حذف شاخه‌ی تسک + کارت به Owner Review + نوتیف «merge شد». اگر merge خودکار شکست بخورد (مثلاً branch protection)، fallback می‌شود به نوتیف «merge دستی کن».
-   - `REQUEST_CHANGES` → بستن PR + **کامنت روی کارت Trello با متن ریویو + لیبل قرمز «باگ»** + بازگشت کارت به To Do + نوتیف اصلاح. (هنگام APPROVE نهایی، لیبل قرمز از کارت برداشته می‌شود.)
+### WF3 — Tech Lead (trigger: every 5 minutes)
+For each card in In Review:
+1. Finds the corresponding PR: fetches all open PRs to develop and picks the one whose `head.ref === task/<cardId>` (a robust method; replaces the previous fragile filter that sometimes failed to find the PR and skipped the review).
+2. **Conflict**: if the PR conflicts with develop (`mergeable_state=dirty`) → Bale notification + close the PR + **comment on the Trello card + red "bug" label** + move the card back to To Do.
+3. **CI (mandatory gate)**: no PR is reviewed or merged without CI passing. The GitHub Actions status on the latest commit is read:
+   - No check has arrived yet → this round is skipped (waits); if the PR stays without CI for more than 20 minutes, a "CI didn't run" warning appears in Bale (but it is never approved/merged without CI).
+   - Running → this round is skipped.
+   - Failed (build or test) → Bale notification + close the PR + **the error log (from the output and annotations of the failed checks) as a comment on the Trello card + red label** + move the card back to To Do for a fix.
+   - Green → continue to review.
+4. **Code review**: Claude evaluates the diff against the task and the stack standard:
+   - `APPROVE` → record an approving review + **auto-merge the PR into develop (squash)** + delete the task branch + move the card to Owner Review + a "merged" notification. If the auto-merge fails (e.g. branch protection), it falls back to a "merge manually" notification.
+   - `REQUEST_CHANGES` → close the PR + **comment on the Trello card with the review text + red "bug" label** + move the card back to To Do + a correction notification. (On the final APPROVE, the red label is removed from the card.)
 
 ### CI / GitHub Actions
-فایل `.github/workflows/ci.yml` هنگام bootstrap **به‌صورت پویا توسط Claude بر اساس فایل‌های `stacks/`** ساخته می‌شود و روی هر **PR به develop** اجرا می‌شود؛ سه job (backend/frontend/mobile) که هرکدام فقط اگر پوشه‌اش موجود باشد build و test را اجرا می‌کند. چون CI از روی همان استک‌ها ساخته می‌شود، اگر استک را عوض کنی (مثلاً `mobile.md`)، در پروژه‌ی بعدی CI هم خودکار با آن هماهنگ تولید می‌شود. WF3 تا CI سبز نشود هرگز approve/merge نمی‌کند، و در صورت رد شدن، لاگ خطا را در کارت Trello می‌گذارد تا Developer در حالت فیکس آن را رفع کند.
+The `.github/workflows/ci.yml` file is built **dynamically by Claude based on the `stacks/` files** during bootstrap and runs on every **PR to develop**; three jobs (backend/frontend/mobile), each of which runs build and test only if its folder exists. Because CI is built from those same stacks, if you change a stack (e.g. `mobile.md`), CI in the next project is also generated automatically in sync with it. WF3 never approves/merges until CI is green, and on failure it puts the error log on the Trello card so the Developer can fix it in fix mode.
 
-### گیت‌فلو
-- `main`: شاخه‌ی پایدار.
-- `develop`: شاخه‌ی یکپارچه‌سازی؛ همه‌ی PRها به اینجا می‌آیند.
-- `task/<cardId>`: شاخه‌ی هر تسک، از develop منشعب و به develop PR می‌خورد.
-- merge نهایی به develop خودکار توسط Tech Lead انجام می‌شود (squash) به‌شرط سبزبودن CI و تأیید ریویو؛ اگر می‌خواهی کنترل انسانی نگه داری، روی develop در گیت‌هاب branch protection بگذار تا merge خودکار رد شود و سیستم به merge دستی fallback کند.
+### gitflow
+- `main`: the stable branch.
+- `develop`: the integration branch; all PRs come here.
+- `task/<cardId>`: each task's branch, forked from develop and PR'd to develop.
+- the final merge to develop is done automatically by the Tech Lead (squash), provided CI is green and the review is approved; if you want to keep human control, set branch protection on develop in GitHub so the auto-merge is rejected and the system falls back to a manual merge.
 
-### مقاومت و خطایابی
-- همه‌ی فراخوانی‌های HTTP داخل Code nodeها با try/catch محافظت شده‌اند.
-- یک parser مقاوم (`jparse`) JSON را حتی اگر Claude کمی متن اضافه برگرداند از داخل متن بیرون می‌کشد.
-- اگر تسک تولید نشد، پاسخ خام مدل در بله نشان داده می‌شود.
-- offset بله در static data ذخیره می‌شود تا پیام تکراری پردازش نشود.
+### Resilience and debugging
+- All HTTP calls inside Code nodes are guarded with try/catch.
+- A resilient parser (`jparse`) extracts JSON from within the text even if Claude returns a little extra text.
+- If a task isn't generated, the raw model response is shown in Bale.
+- The Bale offset is stored in static data so a message isn't processed twice.
 
-### محدودیت‌ها و نکات
-- **پل باید روشن بماند**؛ اگر `claude-bridge.js` خاموش شود، لایه‌ی فکری از کار می‌افتد.
-- **کندی**: هر مرحله یک یا چند `claude -p` صدا می‌زند؛ هر تسک ممکن است چند دقیقه طول بکشد (به همین خاطر timeout روی ۳۰ دقیقه است).
-- **سهمیه‌ی Pro**: حجم بالا ممکن است به محدودیت مصرف اشتراک Pro بخورد.
-- **حلقه‌ی CI**: اگر کد یک تسک مدام CI را رد کند، همان تسک مدام بازسازی می‌شود؛ با `fix:` می‌توانی دستی هدایتش کنی.
-- **امنیت**: همه‌ی توکن‌ها را فقط در `secrets.env` نگه‌دار، در گیت commit نکن، و اگر جایی لو رفتند rotate کن.
+### Limitations and notes
+- **The bridge must stay running**; if `claude-bridge.js` shuts down, the thinking layer stops working.
+- **Slowness**: each step calls one or more `claude -p`; each task may take several minutes (which is why the timeout is 30 minutes).
+- **Pro quota**: high volume may hit the Pro subscription's usage limit.
+- **CI loop**: if a task's code keeps failing CI, that same task keeps getting rebuilt; you can steer it manually with `fix:`.
+- **Security**: keep all tokens only in `secrets.env`, never commit them to git, and rotate them if they ever leak.
 
 ---
 
-## تعویض مدل (اگر خواستی مدل را عوض کنی)
+## Switching Models (if you want to change the model)
 
-سه حالت داری:
+You have three options:
 
-### حالت ۱ — تغییر مدلِ Claude (ساده‌ترین)
-لایه‌ی فکری روی Claude Code است. برای عوض‌کردن مدلِ Claude (مثلاً از Opus به Sonnet برای سرعت/صرفه‌جویی):
+### Option 1 — Change the Claude model (the simplest)
+The thinking layer is on Claude Code. To change the Claude model (e.g. from Opus to Sonnet for speed/cost):
 
-**روش الف — متغیر محیطی روی پل:** پل (`claude-bridge.js`) متغیر `CLAUDE_MODEL` را می‌خواند. هنگام اجرای پل:
+**Method A — environment variable on the bridge:** the bridge (`claude-bridge.js`) reads the `CLAUDE_MODEL` variable. When running the bridge:
 ```
 CLAUDE_MODEL=sonnet node claude-bridge.js
-# یا opus، haiku، یا شناسه‌ی کامل مثل claude-sonnet-4-6
+# or opus, haiku, or a full id like claude-sonnet-4-6
 ```
-**روش ب — داخل Claude Code:** در ترمینال `claude` را باز کن و `/model` بزن و مدل را انتخاب کن؛ پل از همان استفاده می‌کند.
+**Method B — inside Claude Code:** open `claude` in a terminal, run `/model`, and pick the model; the bridge uses that same one.
 
-> فیلد `model` که نودهای N8N می‌فرستند (claude-opus-4-8) توسط پل **نادیده** گرفته می‌شود؛ مدل واقعی را Claude Code تعیین می‌کند. پس فقط کافی است پل/Claude Code را تنظیم کنی — نیازی به دست‌زدن به ورک‌فلوها نیست.
+> The `model` field that the N8N nodes send (claude-opus-4-8) is **ignored** by the bridge; the actual model is determined by Claude Code. So you only need to configure the bridge/Claude Code — no need to touch the workflows.
 
-### حالت ۲ — برگشت به یک API ابری (Gemini / OpenAI / Anthropic API)
-اگر خواستی به‌جای پل از یک API واقعی استفاده کنی:
-1. در هر سه ورک‌فلو، داخل Code nodeها یک ثابت به این شکل هست:
+### Option 2 — Switch back to a cloud API (Gemini / OpenAI / Anthropic API)
+If you want to use a real API instead of the bridge:
+1. In all three workflows, inside the Code nodes there's a constant like this:
    ```
    const CLAUDE_BRIDGE='http://host.docker.internal:8787/v1/messages';
    ```
-   آن را به آدرس API مقصد عوض کن، و تابع `claude(...)` همان نود را طوری تغییر بده که بدنه و پاسخ آن API را بسازد/بخواند.
-2. کلید API را در `secrets.env` بگذار (مثل `GEMINI_API_KEY`) و در تابع `claude()` در هدر/کوئری استفاده کن.
-3. شکل پاسخ را تطبیق بده: تابع باید متنِ تولیدشده را برگرداند (برای Anthropic: `content[0].text`، برای Gemini: `candidates[0].content.parts[0].text`، برای OpenAI: `choices[0].message.content`).
+   Change it to the target API's address, and modify the `claude(...)` function in that node so it builds/reads that API's body and response.
+2. Put the API key in `secrets.env` (e.g. `GEMINI_API_KEY`) and use it in the header/query inside the `claude()` function.
+3. Adapt the response shape: the function must return the generated text (for Anthropic: `content[0].text`, for Gemini: `candidates[0].content.parts[0].text`, for OpenAI: `choices[0].message.content`).
 
-چون کل منطق در Code node است، فقط همان تابع `claude()` را در هر سه ورک‌فلو عوض می‌کنی و بقیه دست‌نخورده می‌ماند.
+Since all the logic is in the Code node, you only change that `claude()` function in all three workflows and the rest stays untouched.
 
-### حالت ۳ — لایه‌بندی مدل (مدل ارزان برای کارهای ساده)
-اگر خواستی کارهای ساده (تولید تسک/مستند) با مدل ارزان‌تر و کد پیچیده با مدل قوی‌تر انجام شود، در همان تابع `claude()` یک پارامتر `model` اضافه کن و در هر فراخوانی مدل مناسب را پاس بده (مثلاً تولید تسک → sonnet، تولید کد → opus). این کار اختیاری و برای بهینه‌سازی هزینه/سرعت است.
+### Option 3 — Model tiering (a cheap model for simple work)
+If you want simple work (task/doc generation) done with a cheaper model and complex code with a stronger model, add a `model` parameter to that same `claude()` function and pass the appropriate model on each call (e.g. task generation → sonnet, code generation → opus). This is optional and meant for cost/speed optimization.
 
 ---
 
-## دستورهای پرتکرار
+## Frequently Used Commands
 
-| کار | دستور |
+| Task | Command |
 |-----|-------|
-| روشن کردن پل | `node claude-bridge.js` |
-| بالا آوردن N8N | `docker compose up -d` |
-| بازسازی با تنظیم جدید | `docker compose up -d --force-recreate` |
-| دیدن لاگ N8N | `docker compose logs -n 50 startup-n8n` |
-| تست اتصال بله | `docker exec startup-n8n sh -c 'wget -qO- https://tapi.bale.ai/bot$BALE_BOT_TOKEN/getUpdates; echo'` |
-| پاک‌کردن کامل برد Trello | اسکریپت archiveAllCards (در راهنمای استفاده) |
+| Start the bridge | `node claude-bridge.js` |
+| Bring up N8N | `docker compose up -d` |
+| Rebuild with new settings | `docker compose up -d --force-recreate` |
+| View N8N logs | `docker compose logs -n 50 startup-n8n` |
+| Test the Bale connection | `docker exec startup-n8n sh -c 'wget -qO- https://tapi.bale.ai/bot$BALE_BOT_TOKEN/getUpdates; echo'` |
+| Fully clear the Trello board | the archiveAllCards script (in the usage guide) |

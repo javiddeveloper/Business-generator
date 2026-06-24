@@ -1,50 +1,50 @@
-# 🤖 استارتاپ خودگردان با N8N
+# 🤖 Autonomous Startup with N8N
 
-یک «تیم نرم‌افزاری مجازی»: در **بله** ایده می‌دهی → سه ورک‌فلو در **N8N** نقش Product Owner، Developer و Tech Lead را بازی می‌کنند → کد در **GitHub** نوشته، تست‌گرفته، PR و ریویو می‌شود. کل کار فکری روی **Claude** (اشتراک Pro، بدون توکن API).
+A "virtual software team": you pitch an idea in **Bale** → three workflows in **N8N** play the roles of Product Owner, Developer, and Tech Lead → code is written, tested, PR'd, and reviewed on **GitHub**. All the thinking work runs on **Claude** (Pro subscription, no API token).
 
-## 📁 ساختار فولدر
+## 📁 Folder Structure
 ```
 ai-startup-n8n/
-├── README.md              ← همین فایل (شروع از اینجا)
-├── SETUP-COMPLETE.md      ← راهنمای کامل ستاپ از صفر + مستند فنی + تعویض مدل
-├── docker-compose.yml     ← اجرای N8N با همه‌ی تنظیمات
-├── claude-bridge.js       ← پل محلی Claude (لایه‌ی فکری)
-├── secrets.env            ← کلیدها (هرگز در گیت commit نکن)
-├── stacks/                ← استک هر پلتفرم (قابل ویرایش: backend.md/frontend.md/mobile.md)
+├── README.md              ← this file (start here)
+├── SETUP-COMPLETE.md      ← full setup guide from scratch + technical docs + model switching
+├── docker-compose.yml     ← runs N8N with all settings
+├── claude-bridge.js       ← local Claude bridge (the thinking layer)
+├── secrets.env            ← keys (never commit to git)
+├── stacks/                ← per-platform stack (editable: backend.md/frontend.md/mobile.md)
 └── workflows/
     ├── workflow-1-product-owner.json
     ├── workflow-2-developer.json
     └── workflow-3-tech-lead.json
 ```
 
-## ⚡ شروع سریع (۵ قدم)
-1. **کلیدها**: `secrets.env` را پر کن (بله، Trello، GitHub) — جزئیات در `SETUP-COMPLETE.md` بخش ۱.
-2. **پل Claude** را روشن کن و باز نگه‌دار:
+## ⚡ Quick Start (5 steps)
+1. **Keys**: fill in `secrets.env` (Bale, Trello, GitHub) — details in `SETUP-COMPLETE.md` section 1.
+2. **Start the Claude bridge** and keep it running:
    ```
    node claude-bridge.js
    ```
-3. **N8N** را بالا بیاور:
+3. **Bring up N8N**:
    ```
    docker compose up -d
    ```
-4. در `http://localhost:5679` هر سه فایل `workflows/*.json` را Import و Active کن.
-5. در بله ایده بفرست:
+4. At `http://localhost:5679`, Import and Activate all three `workflows/*.json` files.
+5. Send an idea in Bale:
    ```
-   name: نام پروژه
+   name: project name
    repo: https://github.com/USER/REPO
-   idea: شرح چیزی که می‌خوای ساخته بشه
+   idea: description of what you want built
    ```
 
-## 🔑 پیش‌نیازها
-Docker · Node.js ۱۸+ · Claude Code (با اشتراک Pro لاگین‌شده)
+## 🔑 Prerequisites
+Docker · Node.js 18+ · Claude Code (logged in with a Pro subscription)
 
-## 📖 جزئیات بیشتر
-همه‌چیز — گرفتن توکن‌ها، نصب، تنظیم، مستند فنی پشت فلوها، و نحوه‌ی تعویض مدل — در **`SETUP-COMPLETE.md`** آمده.
+## 📖 More Details
+Everything — obtaining tokens, installation, configuration, the technical docs behind the flows, and how to switch models — is in **`SETUP-COMPLETE.md`**.
 
-## 💬 پیام‌های بله
-- شروع پروژه: بلوک `name:`/`repo:`/`idea:` (یک پروژه در هر زمان؛ برد قبلش پاک می‌شود)
-- گزارش باگ: `fix: شرح مشکل`
-- قابلیت جدید: `feature: شرح قابلیت`
-- خروج اضطراری: `/exit` (توقف کامل و پاک‌سازی پروژه‌ی فعال)
-- گزارش لحظه‌ای: `/report` (گزارش به ازای هر تسک، همان لحظه)
-- راهنما: `/start` یا `/help`
+## 💬 Bale Messages
+- Start a project: a `name:`/`repo:`/`idea:` block (one project at a time; the previous board is cleared)
+- Bug report: `fix: description of the problem`
+- New feature: `feature: description of the feature`
+- Emergency exit: `/exit` (full stop and cleanup of the active project)
+- On-demand report: `/report` (a per-task report, right now)
+- Help: `/start` or `/help`
