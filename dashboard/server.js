@@ -159,6 +159,29 @@ const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://localhost');
   const p = u.pathname;
   try {
+    if (p === '/api/models' && req.method === 'GET') {
+      try {
+        const r = await fetch(config.bridge + '/models');
+        return sendJson(res, 200, await r.json());
+      } catch (e) {
+        return sendJson(res, 200, { models: [], active: '', error: 'پل در دسترس نیست' });
+      }
+    }
+    if (p === '/api/models' && req.method === 'POST') {
+      const body = JSON.parse((await readBody(req)) || '{}');
+      try {
+        const r = await fetch(config.bridge + '/model', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: body.id }),
+        });
+        const j = await r.json();
+        cache.delete('state'); // health reflects the new engine on next poll
+        return sendJson(res, r.status, j);
+      } catch (e) {
+        return sendJson(res, 502, { ok: false, error: e.message });
+      }
+    }
     if (p === '/api/roles' && req.method === 'GET') {
       return sendJson(res, 200, { files: ROLE_FILES, values: readMdFiles(ROLES_DIR, ROLE_FILES) });
     }

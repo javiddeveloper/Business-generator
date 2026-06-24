@@ -32,6 +32,11 @@
         <div class="stat fix"><span class="stat-num" id="statFixes">۰</span><span class="stat-lbl">فیکس</span></div>
       </div>
 
+      <div class="model-pick" title="مدل فعال">
+        <span class="model-ic">🧠</span>
+        <select id="modelSelect"></select>
+      </div>
+
       <div class="health" id="health" title="وضعیت سیستم">
         <span class="dot" id="bridgeDot"></span>
         <span id="bridgeLabel">در حال اتصال…</span>
@@ -58,6 +63,7 @@
               <button data-tpl="fix:">fix:</button>
               <button data-tpl="feature:">feature:</button>
               <button data-tpl="/report">/report</button>
+              <button data-tpl="/finish">🏁 /finish</button>
               <button data-tpl="/exit" class="danger">/exit</button>
             </div>
             <div class="composer-box" id="composerBox">

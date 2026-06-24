@@ -91,6 +91,47 @@ function setHealth(cls, label) {
   $('bridgeLabel').textContent = label;
 }
 
+// ---------- model picker ----------
+async function refreshModels() {
+  const sel = $('modelSelect');
+  let data;
+  try {
+    data = await api('/api/models');
+  } catch (e) {
+    return;
+  }
+  if (!data.models || !data.models.length) {
+    sel.innerHTML = '<option>—</option>';
+    sel.disabled = true;
+    return;
+  }
+  sel.disabled = false;
+  // only rebuild if the option set changed, to avoid clobbering an open dropdown
+  const sig = data.models.map((m) => m.id).join(',');
+  if (sel.dataset.sig !== sig) {
+    sel.innerHTML = '';
+    for (const m of data.models) {
+      const o = el('option', null, m.label);
+      o.value = m.id;
+      sel.appendChild(o);
+    }
+    sel.dataset.sig = sig;
+  }
+  sel.value = data.active;
+}
+
+$('modelSelect').addEventListener('change', async (e) => {
+  const id = e.target.value;
+  try {
+    await api('/api/models', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+  } catch (err) {}
+  refreshState();
+});
+
 function renderBoard(columns) {
   const board = $('board');
   board.innerHTML = '';
@@ -560,5 +601,7 @@ $('prFilters').addEventListener('click', (e) => {
 // ---------- loops ----------
 refreshState();
 refreshActivity();
+refreshModels();
 setInterval(refreshState, 5_000);
 setInterval(refreshActivity, 5_000);
+setInterval(refreshModels, 10_000);

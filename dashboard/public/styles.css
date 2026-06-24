@@ -117,6 +117,37 @@ body {
 .stat.fix .stat-num {
   color: var(--green);
 }
+.model-pick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+}
+.model-ic {
+  font-size: 14px;
+}
+.model-pick select {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+  max-width: 160px;
+}
+.model-pick select option {
+  background: var(--panel-solid);
+  color: var(--text);
+}
+.model-pick select:disabled {
+  color: var(--faint);
+  cursor: not-allowed;
+}
 .health {
   display: flex;
   align-items: center;

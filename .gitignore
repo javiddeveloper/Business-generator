@@ -10,3 +10,6 @@ node_modules/
 
 # Local tooling config (machine-specific)
 .claude/
+
+# Bridge runtime state (active model selection)
+model-state.json

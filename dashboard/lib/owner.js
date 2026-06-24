@@ -218,10 +218,15 @@ async function bootstrap(repo) {
   if (wfErr) throw new Error('CI push failed: ' + String(wfErr).slice(0, 250) + ' — token needs repo+workflow scope.');
 }
 
+// A project stays "active" until the owner types `finish`. So the Done column
+// (`owner`) counts too: even when every task is finished, the project remains
+// live so fix:/feature: keep working and a new idea stays blocked.
+const PROJECT_COLS = ['todo', 'prog', 'review', 'wait', 'owner'];
+
 // ---- find the active project's meta from any populated column -------------
 async function findMeta() {
   const L = config.trello.lists;
-  for (const k of ['todo', 'prog', 'review', 'wait']) {
+  for (const k of PROJECT_COLS) {
     const cs = await T.listCards(L[k]);
     for (const c of cs) {
       const mm = T.parseMeta(c.desc);
@@ -234,8 +239,61 @@ async function findMeta() {
 async function countActive() {
   const L = config.trello.lists;
   let n = 0;
-  for (const k of ['todo', 'prog', 'review', 'wait']) n += (await T.listCards(L[k])).length;
+  for (const k of PROJECT_COLS) n += (await T.listCards(L[k])).length;
   return n;
+}
+
+// ---- model picker (proxied to the bridge) --------------------------------
+async function bridgeModels() {
+  const r = await fetch(config.bridge + '/models');
+  return r.json();
+}
+
+async function handleModels() {
+  let data;
+  try {
+    data = await bridgeModels();
+  } catch (e) {
+    reply('⚠️ پل در دسترس نیست؛ لیست مدل‌ها را نتوانستم بگیرم.');
+    return { error: true };
+  }
+  const lines = data.models.map(
+    (m, i) => (m.id === data.active ? '✅ ' : '▫️ ') + (i + 1) + '. ' + m.label,
+  );
+  reply('🧠 مدل‌ها (برای انتخاب: «/model شماره» یا «/model آی‌دی»):\n\n' + lines.join('\n'));
+  return { models: data.models.length };
+}
+
+async function handleModel(arg) {
+  let data;
+  try {
+    data = await bridgeModels();
+  } catch (e) {
+    reply('⚠️ پل در دسترس نیست.');
+    return { error: true };
+  }
+  const a = String(arg || '').trim();
+  let target = null;
+  if (/^\d+$/.test(a)) target = data.models[Number(a) - 1];
+  else target = data.models.find((m) => m.id === a);
+  if (!target) {
+    reply('⚠️ مدل پیدا نشد. «/models» را بزن تا لیست را ببینی.');
+    return { notfound: true };
+  }
+  try {
+    const r = await fetch(config.bridge + '/model', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: target.id }),
+    });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'switch failed');
+    reply('✅ مدل فعال شد: ' + target.label);
+    return { active: target.id };
+  } catch (e) {
+    reply('⚠️ تعویض مدل ناموفق: ' + e.message);
+    return { error: true };
+  }
 }
 
 // ---- command handlers ----------------------------------------------------
@@ -326,6 +384,20 @@ async function handleExit() {
   return { exit: cleared };
 }
 
+// Graceful project end: clear the board so a new idea can start.
+// (Distinct from /exit which is the emergency stop — same effect, friendlier intent.)
+async function handleFinish() {
+  const L = config.trello.lists;
+  let cleared = 0;
+  for (const k of Object.keys(L)) {
+    const cs = await T.listCards(L[k]);
+    cleared += cs.length;
+    for (const c of cs) await T.deleteCard(c.id);
+  }
+  reply('🏁 پروژه تمام شد و برد پاک شد (' + cleared + ' تسک). حالا می‌توانی ایده‌ی جدید بفرستی.');
+  return { finished: cleared };
+}
+
 async function handleReport() {
   const L = config.trello.lists;
   const SLABEL = { todo: 'To Do', prog: 'In Progress', wait: 'Waiting API', review: 'In Review', owner: 'Done/merge' };
@@ -368,9 +440,12 @@ async function runCommand(text) {
   activity.push('user', t);
 
   if (low === '/exit' || low === '/stop') return handleExit();
+  if (low === '/finish' || low === 'finish' || low === '/done') return handleFinish();
   if (low === '/report') return handleReport();
+  if (low === '/models') return handleModels();
+  if (low.startsWith('/model ') || low.startsWith('/model\n')) return handleModel(t.slice(6).trim());
   if (low === '/help' || low === '/start') {
-    reply('🤖 دستورها: idea (name/repo/idea) | fix: ... | feature: ... | /report | /exit');
+    reply('🤖 دستورها: idea (name/repo/idea) | fix: ... | feature: ... | /report | /finish | /exit | /models | /model <شماره>');
     return { help: true };
   }
   if (low.startsWith('fix:')) return handleFixFeature('fix', t.slice(4).trim());
