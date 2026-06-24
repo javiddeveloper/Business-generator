@@ -38,6 +38,128 @@ async function readStack(track) {
   }
 }
 
+async function readRole(role) {
+  try {
+    const res = await fetch(config.bridge + '/role/' + role);
+    return (await res.text()).trim();
+  } catch (e) {
+    return '';
+  }
+}
+
+// ---- manual developer run (the n8n WF2 pipeline, triggered from the dashboard)
+// Lets you test the clone+real-agent flow on one card without n8n: builds the
+// same agent brief, calls the bridge /code-task, then opens the PR and moves the
+// card to In Review. Mirrors workflows/workflow-2-developer.json.
+async function runCodeTask(cardId) {
+  const L = config.trello.lists;
+  const detail = await T.getCardDetail(cardId);
+  if (!detail || !detail.name) {
+    reply('⚠️ کارت پیدا نشد.');
+    return { error: 'card not found' };
+  }
+  const mm = T.parseMeta(detail.desc);
+  if (!mm.repo) {
+    reply('⚠️ این کارت آدرس repo ندارد؛ نمی‌توان کلون کرد.');
+    return { error: 'no repo' };
+  }
+  const track = T.trackOf(detail.name);
+  const dir = track + '/';
+  const branch = 'task/' + cardId;
+
+  // fix mode: branch already exists → patch, don't rewrite
+  let isFix = false;
+  try {
+    await gh('GET', '/repos/' + mm.repo + '/git/ref/heads/' + branch);
+    isFix = true;
+  } catch (e) {}
+  let failLog = '';
+  if (isFix && detail.comments && detail.comments.length) {
+    failLog = detail.comments.slice(0, 3).map((c) => c.text).filter(Boolean).join('\n----\n');
+  }
+  let apiDocs = '';
+  if (track !== 'backend') {
+    try {
+      apiDocs = await gh('GET', '/repos/' + mm.repo + '/contents/docs/api/API.md?ref=develop', null, true);
+    } catch (e) {}
+  }
+
+  reply('🚀 اجرای تسک «' + detail.name + '» روی ' + mm.repo + ' (کلون + agent)…');
+
+  const stackText = await readStack(track);
+  const devRole = (await readRole('developer')) || '';
+  const base =
+    (devRole ? devRole + '\n\n' : '') +
+    stackText +
+    '\nنام پروژه: ' + (mm.project || '') +
+    (mm.ref ? '\nمرجع: ' + mm.ref : '') +
+    '\nهمه‌ی کد باید زیر پوشه‌ی ' + dir + ' باشد.' +
+    (apiDocs ? '\n\nمستندات API:\n' + apiDocs : '');
+  const workRules =
+    '\n\nتو داخل یک checkout گیت از پروژه کار می‌کنی و به ابزارهای Read/Grep/Edit/Write/Bash دسترسی کامل داری. قبل از نوشتن، فایل‌های همسایه را بخوان تا از قراردادها پیروی کنی. همه‌ی کد و تست‌ها باید زیر ' + dir + ' باشند؛ به track‌های دیگر دست نزن. طبق استک حداقل ۳ تست واقعی بنویس.\n\n⚙️ قبل از پایان، تست‌ها را با Bash لوکال اجرا کن و فقط وقتی سبز شدند کار را تمام کن. وقتی تمام شد متوقف شو.';
+  const prompt = isFix
+    ? base + workRules +
+      '\n\n⚠️ این تسک قبلاً پیاده‌سازی شده بود ولی باگ/خطای build یا test داشت و برگشت. کد فعلی در working tree موجود است؛ آن را بخوان و فقط مشکل را رفع کن (بازنویسی نکن).\n\nخطاها:\n' +
+      (failLog || '(نامشخص — کد را بازبینی کن)') +
+      '\n\nتسک:\n' + detail.name + '\n' + detail.desc
+    : base + workRules + '\n\nتسک:\n' + detail.name + '\n' + detail.desc;
+
+  let ct;
+  try {
+    const r = await fetch(config.bridge + '/code-task', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        repo: mm.repo,
+        cloneUrl: mm.clone || '',
+        branch,
+        track,
+        task: prompt,
+        message: (isFix ? 'fix: ' : 'feat: ') + detail.name,
+      }),
+    });
+    ct = await r.json();
+  } catch (e) {
+    ct = { ok: false, error: e.message };
+  }
+
+  if (!ct || !ct.ok) {
+    reply('⚠️ اجرای تسک ناموفق: ' + ((ct && ct.error) || 'خطای نامشخص'));
+    return ct || { error: 'failed' };
+  }
+  if (!ct.committed) {
+    reply('⚠️ agent تغییری اعمال نکرد' + (ct.noChanges ? ' (no changes)' : '') + '.');
+    return ct;
+  }
+
+  const [o, r] = mm.repo.split('/');
+  let pr;
+  try {
+    pr = await gh('POST', '/repos/' + o + '/' + r + '/pulls', {
+      title: detail.name,
+      head: branch,
+      base: 'develop',
+      body: 'Trello: ' + cardId + '\nTrack: ' + track + '\nFiles: ' + (ct.filesChanged || []).slice(0, 20).join(', ') + '\n\n' + (detail.desc || ''),
+    });
+  } catch (e) {
+    try {
+      const ex = await gh('GET', '/repos/' + o + '/' + r + '/pulls?head=' + o + ':' + branch + '&state=open');
+      pr = (ex && ex[0]) || null;
+    } catch (e2) {}
+    if (!pr) {
+      reply('⚠️ کد push شد ولی ساخت PR ناموفق بود: ' + (e.message || ''));
+      return { ok: true, committed: true, prError: true, branch };
+    }
+  }
+  if (isFix) {
+    const chg = (ct.filesChanged || []).slice(0, 12).join('، ');
+    try { await T.addComment(cardId, '🛠️ فیکس اعمال شد (PR #' + pr.number + '). فایل‌ها: ' + (chg || '-')); } catch (e) {}
+  }
+  await T.moveCard(cardId, L.review);
+  reply((isFix ? '🔧 فیکس شد و رفت برای ریویو: ' : '👀 رفت برای ریویو: ') + detail.name + '\nPR: ' + pr.html_url + '\nفایل‌ها: ' + (ct.filesChanged || []).length);
+  return { ok: true, pr: pr.number, url: pr.html_url, files: (ct.filesChanged || []).length, isFix };
+}
+
 // ---- per-stack CI generators (ported from WF1) ---------------------------
 const mkWf = (track, steps) =>
   [
@@ -297,7 +419,7 @@ async function handleModel(arg) {
 }
 
 // ---- command handlers ----------------------------------------------------
-async function handleIdea({ name, repo, idea, link }) {
+async function handleIdea({ name, repo, idea, link, clone }) {
   const L = config.trello.lists;
   if (!name || !repo || !idea) throw new Error('idea needs name, repo and idea');
   if ((await countActive()) > 0) {
@@ -340,7 +462,7 @@ async function handleIdea({ name, repo, idea, link }) {
     const tr = (t.track || 'backend').toLowerCase();
     const list = tr === 'backend' ? L.todo : hasBackend ? L.wait : L.todo;
     const cname = '[' + tr + '][' + (t.complexity || 'medium') + '] ' + t.title;
-    const desc = (t.desc || '') + '\n\n---\nrepo: ' + repo + '\nproject: ' + name + (link ? '\nref: ' + link : '');
+    const desc = (t.desc || '') + '\n\n---\nrepo: ' + repo + '\nproject: ' + name + (link ? '\nref: ' + link : '') + (clone ? '\nclone: ' + clone : '');
     await T.createCard(list, cname, desc);
     names.push('• ' + cname);
   }
@@ -366,7 +488,7 @@ async function handleFixFeature(kind, desc) {
     ),
   ) || { title: (desc || '').slice(0, 50), desc, track: 'backend', complexity: 'medium' };
   const name = '[' + (t.track || 'backend') + '][' + (t.complexity || 'medium') + '][' + kind + '] ' + t.title;
-  const body = (t.desc || '') + '\n\n---\nrepo: ' + mm.repo + '\nproject: ' + mm.project + (mm.ref ? '\nref: ' + mm.ref : '');
+  const body = (t.desc || '') + '\n\n---\nrepo: ' + mm.repo + '\nproject: ' + mm.project + (mm.ref ? '\nref: ' + mm.ref : '') + (mm.clone ? '\nclone: ' + mm.clone : '');
   await T.createCard(L.todo, name, body);
   reply('✅ ' + label + ' اضافه شد:\n• ' + name);
   return { added: name };
@@ -459,6 +581,7 @@ async function runCommand(text) {
       name: g(/name:\s*(.+)/i),
       repo: g(/repo:\s*(\S+)/i),
       link: g(/link:\s*(\S+)/i),
+      clone: g(/clone:\s*(\S+)/i),
       idea: g(/idea:\s*([\s\S]+)/i),
     });
   }
@@ -466,4 +589,4 @@ async function runCommand(text) {
   return { unknown: true };
 }
 
-module.exports = { runCommand };
+module.exports = { runCommand, runCodeTask };

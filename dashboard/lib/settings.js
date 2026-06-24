@@ -24,6 +24,8 @@ const FIELDS = [
   // GapGPT (optional model provider — only needed if you switch to the GapGPT engine)
   { key: 'GAPGPT_API_KEY', label: 'کلید API گپ‌جی‌پی‌تی', group: 'GapGPT', required: false, secret: true, hint: 'فقط برای موتور GapGPT' },
   { key: 'GAPGPT_BASE_URL', label: 'آدرس پایه (اختیاری)', group: 'GapGPT', required: false, hint: 'پیش‌فرض: https://api.gapgpt.app/v1' },
+  // Workspace (where the bridge clones repos for the real-agent developer flow)
+  { key: 'WORKSPACE_DIR', label: 'مسیر کلون پروژه‌ها', group: 'Workspace', required: false, hint: 'پیش‌فرض: ~/.business-generator/workspaces' },
 ];
 
 const REQUIRED = FIELDS.filter((f) => f.required).map((f) => f.key);

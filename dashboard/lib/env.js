@@ -22,7 +22,7 @@ function reload() {
   config.github = { token: v.GITHUB_TOKEN };
   config.bale = { token: v.BALE_BOT_TOKEN, ownerChat: v.OWNER_CHAT };
   config.bridge = process.env.CLAUDE_BRIDGE || 'http://localhost:8787';
-  config.port = Number(process.env.DASH_PORT || 8090);
+  config.port = Number(process.env.DASH_PORT || process.env.PORT || 8090);
   config.configured = settings.isConfigured(v);
   return config;
 }

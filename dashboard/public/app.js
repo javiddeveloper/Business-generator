@@ -237,6 +237,52 @@ async function openCardDetail(cardId, cardName) {
     body.appendChild(link);
   }
 
+  // Manual developer run: clone + real agent + PR, straight from the dashboard.
+  if (data.desc && /repo:\s*\S+/.test(data.desc)) {
+    const runWrap = el('div', 'detail-run');
+    const runBtn = el('button', 'run-task-btn', '▶ اجرای این تسک با agent (کلون + کد + PR)');
+    const runMsg = el('div', 'run-task-msg');
+    runBtn.addEventListener('click', async () => {
+      if (!confirm('agent این تسک را کلون می‌کند، کد می‌نویسد و یک PR به develop می‌سازد. ادامه؟')) return;
+      runBtn.disabled = true;
+      runBtn.textContent = '⏳ در حال اجرا… (ممکن است تا یک دقیقه طول بکشد)';
+      runMsg.textContent = '';
+      runMsg.className = 'run-task-msg';
+      let res;
+      try {
+        res = await api('/api/code-task', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cardId }),
+        });
+      } catch (e) {
+        res = { ok: false, error: e.message };
+      }
+      const r = (res && res.result) || {};
+      if (res && res.ok && r.pr) {
+        runMsg.className = 'run-task-msg ok';
+        runMsg.innerHTML = '✅ PR #' + faNum(r.pr) + ' ساخته شد (' + faNum(r.files || 0) + ' فایل). ';
+        const a = el('a', 'detail-link', '🔗 مشاهده PR');
+        a.href = r.url; a.target = '_blank';
+        runMsg.appendChild(a);
+        runBtn.textContent = '✅ انجام شد';
+        lastActivitySig = '';
+        refreshActivity(); refreshState();
+        if (activeMainTab === 'prs') refreshPRs();
+      } else {
+        runMsg.className = 'run-task-msg err';
+        runMsg.textContent = '⚠️ ' + ((r && r.error) || (res && res.error) || 'اجرا ناموفق بود');
+        runBtn.disabled = false;
+        runBtn.textContent = '▶ تلاش دوباره';
+        lastActivitySig = '';
+        refreshActivity();
+      }
+    });
+    runWrap.appendChild(runBtn);
+    runWrap.appendChild(runMsg);
+    body.appendChild(runWrap);
+  }
+
   if (data.labels && data.labels.length) {
     const row = el('div', 'detail-row');
     row.appendChild(el('span', 'detail-key', 'برچسب‌ها'));

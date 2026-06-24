@@ -49,7 +49,7 @@ function parseMeta(desc) {
       .replace(/\.git$/, '')
       .replace(/^https?:\/\/github\.com\//i, '')
       .replace(/^github\.com\//i, '');
-  return { repo: normRepo(g(/repo:\s*(\S+)/)), project: g(/project:\s*(.+)/), ref: g(/ref:\s*(\S+)/) };
+  return { repo: normRepo(g(/repo:\s*(\S+)/)), project: g(/project:\s*(.+)/), ref: g(/ref:\s*(\S+)/), clone: g(/clone:\s*(\S+)/) };
 }
 
 function trackOf(name) {
