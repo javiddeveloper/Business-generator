@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>⚡ مرکز فرماندهی — استارتاپ خودگردان</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">⚡</span>
+        <div>
+          <div class="brand-title">مرکز فرماندهی</div>
+          <div class="brand-sub">استارتاپ خودگردان · n8n + Claude</div>
+        </div>
+      </div>
+
+      <div class="project-chip" id="projectChip">
+        <span class="muted">پروژه‌ی فعالی نیست</span>
+      </div>
+
+      <div class="stats" id="stats">
+        <div class="stat"><span class="stat-num" id="statTasks">۰</span><span class="stat-lbl">تسک</span></div>
+        <div class="stat bug"><span class="stat-num" id="statBugs">۰</span><span class="stat-lbl">باگ</span></div>
+        <div class="stat fix"><span class="stat-num" id="statFixes">۰</span><span class="stat-lbl">فیکس</span></div>
+      </div>
+
+      <div class="health" id="health" title="وضعیت سیستم">
+        <span class="dot" id="bridgeDot"></span>
+        <span id="bridgeLabel">در حال اتصال…</span>
+      </div>
+
+      <button class="gear" id="gearBtn" title="تنظیمات">⚙️</button>
+    </header>
+
+    <main class="layout">
+      <!-- SIDE: activity + composer -->
+      <aside class="side">
+        <div class="panel chat-panel">
+          <div class="panel-head">
+            <h3>فعالیت</h3>
+            <span class="live"><span class="live-dot"></span> زنده</span>
+          </div>
+          <div class="timeline" id="timeline">
+            <div class="empty">در انتظار فعالیت…</div>
+          </div>
+
+          <div class="composer">
+            <div class="quick" id="quick">
+              <button data-tpl="idea">＋ ایده‌ی جدید</button>
+              <button data-tpl="fix:">fix:</button>
+              <button data-tpl="feature:">feature:</button>
+              <button data-tpl="/report">/report</button>
+              <button data-tpl="/exit" class="danger">/exit</button>
+            </div>
+            <div class="composer-box" id="composerBox">
+              <textarea
+                id="composer"
+                rows="1"
+                dir="auto"
+                placeholder="یک دستور بفرست… (ایده / fix: / feature: / ‏/report / ‏/exit)"
+              ></textarea>
+              <div class="composer-inner-foot">
+                <span class="hint-tip">Enter ارسال · Shift+Enter خط جدید</span>
+                <button id="sendBtn" class="send">ارسال</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- MAIN: tabbed Board + PRs -->
+      <section class="main-content">
+        <div class="main-tabs" id="mainTabs">
+          <button class="mtab active" data-mtab="board">
+            📋 برد <span class="badge" id="boardCount">۰</span>
+          </button>
+          <button class="mtab" data-mtab="prs">
+            🔀 پول‌ریکوئست‌ها <span class="badge" id="prCount">۰</span>
+          </button>
+          <span class="live mtab-live"><span class="live-dot"></span> زنده</span>
+        </div>
+
+        <div class="mtab-panel" id="view-board">
+          <div class="board" id="board"></div>
+        </div>
+
+        <div class="mtab-panel" id="view-prs" style="display:none">
+          <div class="pr-filters" id="prFilters">
+            <button data-f="open" class="active">باز</button>
+            <button data-f="closed">بسته</button>
+            <button data-f="failure">خطادار</button>
+            <button data-f="all">همه</button>
+          </div>
+          <div class="pr-list" id="prList">
+            <div class="empty">پول‌ریکوئست بازی نیست.</div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- DETAIL MODAL (card / PR) -->
+    <div class="modal-overlay" id="detailOverlay" hidden>
+      <div class="modal modal-wide" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <div style="min-width:0;flex:1">
+            <h2 id="detailTitle" style="font-size:15px;word-break:break-word"></h2>
+            <p class="modal-sub" id="detailMeta"></p>
+          </div>
+          <button class="modal-close" id="detailClose" title="بستن">✕</button>
+        </div>
+        <div class="modal-body detail-body" id="detailBody">
+          <div class="empty">در حال بارگذاری…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SETTINGS MODAL -->
+    <div class="modal-overlay" id="settingsOverlay" hidden>
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <div>
+            <h2 id="settingsTitle">تنظیمات</h2>
+            <p class="modal-sub" id="settingsSub">کلیدها و توکن‌ها را اینجا وارد کن. در <code>secrets.env</code> ذخیره می‌شوند.</p>
+          </div>
+          <button class="modal-close" id="settingsClose" title="بستن">✕</button>
+        </div>
+        <div class="modal-tabs" id="settingsTabs">
+          <button class="stab active" data-stab="tokens">🔑 توکن‌ها</button>
+          <button class="stab" data-stab="stacks">⚙️ تخصص‌ها</button>
+          <button class="stab" data-stab="roles">🎭 وظایف</button>
+        </div>
+        <form class="modal-body" id="settingsForm"></form>
+        <div class="modal-body stab-panel" id="settingsStacks" style="display:none"></div>
+        <div class="modal-body stab-panel" id="settingsRoles" style="display:none"></div>
+        <div class="modal-foot">
+          <span class="save-state" id="saveState"></span>
+          <button class="send" id="saveBtn" type="button">ذخیره</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

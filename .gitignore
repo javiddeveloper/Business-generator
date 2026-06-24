@@ -7,3 +7,6 @@ __MACOSX/
 
 # Node
 node_modules/
+
+# Local tooling config (machine-specific)
+.claude/
