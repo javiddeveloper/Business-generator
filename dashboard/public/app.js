@@ -880,8 +880,14 @@ async function renderRepo(r) {
   const info = el('div', 'repo-info');
 
   if (isLocal) {
-    const title = el('span', 'repo-title', r.repo);
-    info.appendChild(title);
+    if (r.githubRepo) {
+      const title = el('a', 'repo-title', r.githubRepo);
+      title.href = 'https://github.com/' + r.githubRepo;
+      title.target = '_blank';
+      info.appendChild(title);
+    } else {
+      info.appendChild(el('span', 'repo-title', r.repo));
+    }
     const st = el('span', 'repo-status ok', '✅ ' + t('repoLocal'));
     info.appendChild(st);
   } else {

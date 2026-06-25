@@ -81,6 +81,28 @@ async function localBranches(dir) {
   return { current: cur.out.trim(), branches };
 }
 
+// Extract GitHub owner/repo from a git remote URL (https or ssh).
+function parseRemoteSlug(remoteUrl) {
+  if (!remoteUrl) return '';
+  let s = remoteUrl.trim().replace(/\.git$/, '');
+  // ssh: git@github.com:owner/repo
+  const ssh = s.match(/github\.com[:/](.+\/[^/]+)$/i);
+  if (ssh) return ssh[1];
+  // https: https://github.com/owner/repo
+  const https = s.match(/github\.com\/(.+\/[^/]+)$/i);
+  if (https) return https[1];
+  return '';
+}
+
+// Read remote.origin.url from a local .git/config
+function readGitRemote(dir) {
+  try {
+    const cfg = fs.readFileSync(path.join(dir, '.git', 'config'), 'utf8');
+    const m = cfg.match(/\[remote "origin"\][^\[]*url\s*=\s*(.+)/);
+    return m ? m[1].trim() : '';
+  } catch { return ''; }
+}
+
 // Full status for a project's repo: is it cloned, where, and its branches.
 async function status(repo) {
   const slug = normRepo(repo);
@@ -103,9 +125,14 @@ async function status(repo) {
       const lb = await localBranches(dir);
       out.current = lb.current;
       out.branches = lb.branches;
+      // auto-detect GitHub slug from .git/config remote.origin.url
+      const remoteUrl = readGitRemote(dir);
+      const detectedSlug = parseRemoteSlug(remoteUrl);
+      if (detectedSlug) out.githubRepo = detectedSlug;
       // still surface the default branch from the API when available (skip for local)
-      if (!isLocalPath) {
-        out.defaultBranch = await remoteBranches(slug).then((r) => r.defaultBranch).catch(() => '');
+      const ghSlug = detectedSlug || (!isLocalPath ? slug : '');
+      if (ghSlug) {
+        out.defaultBranch = await remoteBranches(ghSlug).then((r) => r.defaultBranch).catch(() => '');
       }
     } else if (!isLocalPath) {
       const rb = await remoteBranches(slug);
