@@ -16,3 +16,6 @@ model-state.json
 
 # Dashboard runtime state (projects, chat sessions, board cache)
 data/
+
+# Trae AI analysis file
+TRAE.md

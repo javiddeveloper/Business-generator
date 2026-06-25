@@ -5,6 +5,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 const { config, reload, COLUMNS } = require('./lib/env');
 const settings = require('./lib/settings');
@@ -225,6 +226,7 @@ const server = http.createServer(async (req, res) => {
         configured: settings.isConfigured(),
         fields: settings.FIELDS,
         values: settings.parseFile(),
+        rootDir: ROOT,
       });
     }
     if (p === '/api/settings' && req.method === 'POST') {
@@ -241,23 +243,48 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, await cached(key, 3000, () => loadState(project)));
     }
     if (p === '/api/browse' && req.method === 'POST') {
-      const os = require('os');
       const { exec } = require('child_process');
       let cmd = '';
       if (os.platform() === 'win32') {
         cmd = 'powershell -NoProfile -Command "Add-Type -AssemblyName System.windows.forms; $f=New-Object System.Windows.Forms.FolderBrowserDialog; [void]$f.ShowDialog(); $f.SelectedPath"';
       } else if (os.platform() === 'darwin') {
-        cmd = 'osascript -e \'POSIX path of (choose folder)\'';
+        // Activate Finder first so the dialog appears in front of the browser window
+        cmd = `osascript -e 'tell application "Finder" to activate' -e 'POSIX path of (choose folder with prompt "انتخاب پوشه پروژه:")'`;
       } else {
-        cmd = 'zenity --file-selection --directory';
+        cmd = 'zenity --file-selection --directory 2>/dev/null';
       }
       return new Promise((resolve) => {
-        exec(cmd, (err, stdout) => {
-          let selected = stdout ? stdout.trim() : '';
-          sendJson(res, 200, { path: selected });
+        exec(cmd, { timeout: 60000 }, (err, stdout, stderr) => {
+          const selected = stdout ? stdout.trim() : '';
+          if (!selected && err) {
+            // User cancelled or dialog failed
+            const errMsg = (stderr || err.message || '').trim();
+            const cancelled = /User canceled|cancelled/i.test(errMsg) || err.code === 1;
+            sendJson(res, 200, { path: '', cancelled: cancelled, error: cancelled ? null : errMsg });
+          } else {
+            sendJson(res, 200, { path: selected });
+          }
           resolve();
         });
       });
+    }
+    // ---- ls: list subdirectories for in-browser folder picker -----------
+    if (p === '/api/ls' && req.method === 'GET') {
+      const reqPath = u.searchParams.get('path') || os.homedir();
+      const resolved = (reqPath === '~') ? os.homedir()
+        : reqPath.startsWith('~/') ? path.join(os.homedir(), reqPath.slice(2))
+        : reqPath;
+      try {
+        const entries = fs.readdirSync(resolved, { withFileTypes: true });
+        const dirs = entries
+          .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
+          .map((e) => ({ name: e.name, path: path.join(resolved, e.name) }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        const parent = path.dirname(resolved);
+        return sendJson(res, 200, { ok: true, current: resolved, parent: parent !== resolved ? parent : null, dirs });
+      } catch (e) {
+        return sendJson(res, 200, { ok: false, error: e.message });
+      }
     }
     // ---- projects --------------------------------------------------------
     if (p === '/api/projects' && req.method === 'GET') return sendJson(res, 200, store.listProjects());

@@ -85,8 +85,11 @@ async function localBranches(dir) {
 async function status(repo) {
   const slug = normRepo(repo);
   const isLocalPath = /^([a-zA-Z]:[/\\]|\\\\|\/|~)/.test(slug);
-  if (!slug || (!isLocalPath && slug.indexOf('/') < 0)) {
-    return { ok: false, error: 'این پروژه ریپوی معتبر (owner/name) یا مسیر محلی ندارد' };
+  if (!slug) {
+    return { ok: false, error: 'no-repo', errorType: 'empty' };
+  }
+  if (!isLocalPath && slug.indexOf('/') < 0) {
+    return { ok: false, error: `"${slug}" یک مسیر معتبر نیست. برای پروژه محلی مسیر کامل را وارد کنید (مثلاً /Users/... یا ~/...) و برای گیت‌هاب فرمت owner/repo را استفاده کنید.`, errorType: 'invalid-path', stored: slug };
   }
   const dir = repoDir(slug);
   const dirExists = fs.existsSync(dir);
