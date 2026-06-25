@@ -91,9 +91,9 @@ function runCli(bin, model, prompt) {
     child.on('close', () => {
       try {
         const r = JSON.parse(out);
-        // claude/agy -p return { is_error, result, ... }. Surface real errors.
-        if (r.is_error) return resolve({ error: r.result || r.subtype || 'unknown engine error' });
-        return resolve({ text: r.result || r.text || r.response || out });
+        // claude/agy return structured JSON.
+        if (r.is_error || r.error) return resolve({ error: r.result || r.error || r.subtype || 'unknown engine error' });
+        return resolve({ text: r.result || r.text || r.response || r.output || out });
       } catch (e) {
         return resolve({ text: out || err });
       }
@@ -176,15 +176,21 @@ function buildAuthUrl(src, token) {
 }
 
 // Headless agent arguments per CLI. claude is the tested path; agy is best-effort
-// (assumed claude-compatible flags) until validated on a machine that has it.
 function agentArgs(bin, model) {
-  const args = ['-p', '--output-format', 'json'];
-  if (model) args.push('--model', model);
+  const args = [];
   if (bin === 'claude') {
+    args.push('-p', '--output-format', 'json');
+    if (model) args.push('--model', model);
     args.push('--dangerously-skip-permissions', '--allowedTools', 'Read Edit Write Bash Grep');
+  } else if (bin === 'agy' || bin === 'antigravity') {
+    // Antigravity CLI typically uses --json for output and --auto-approve for headless
+    args.push('--prompt', '-', '--json');
+    if (model) args.push('--model', model);
+    args.push('--auto-approve');
   } else {
-    // agy / other CLIs: best-effort auto-approve. Adjust if the CLI differs.
-    args.push('--dangerously-skip-permissions', '--allowedTools', 'Read Edit Write Bash Grep');
+    args.push('-p', '--output-format', 'json');
+    if (model) args.push('--model', model);
+    args.push('--dangerously-skip-permissions');
   }
   return args;
 }
@@ -252,8 +258,8 @@ function runAgentInDir(bin, model, prompt, cwd) {
     child.on('close', (code) => {
       try {
         const r = JSON.parse(out);
-        if (r.is_error) return finish({ error: r.result || r.subtype || 'agent error' });
-        return finish({ summary: String(r.result || r.text || '').slice(0, 4000), durationMs: r.duration_ms, cost: r.total_cost_usd });
+        if (r.is_error || r.error) return finish({ error: r.result || r.error || r.subtype || 'agent error' });
+        return finish({ summary: String(r.result || r.text || r.output || '').slice(0, 4000), durationMs: r.duration_ms, cost: r.total_cost_usd });
       } catch (e) {
         if (code !== 0) return finish({ error: (err || out || 'agent exited ' + code).slice(0, 600) });
         return finish({ summary: String(out).slice(0, 4000) });

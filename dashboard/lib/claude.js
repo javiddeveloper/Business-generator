@@ -1,10 +1,14 @@
 // Calls the local Claude bridge (Pro subscription). Same contract the n8n nodes use.
 const { config } = require('./env');
+const activity = require('./activity');
 
-async function claude(prompt, maxTokens = 3000) {
+async function claude(prompt, maxTokens = 3000, signal) {
+  // fall back to the abort signal carried on the active session context (STOP button)
+  signal = signal || ((activity.ctx() || {}).signal);
   const res = await fetch(config.bridge + '/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    signal,
     body: JSON.stringify({
       model: 'claude-opus-4-8',
       max_tokens: maxTokens,

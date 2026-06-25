@@ -88,6 +88,304 @@ body {
 .project-chip a:hover {
   text-decoration: underline;
 }
+.project-chip select {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  outline: none;
+  cursor: pointer;
+  max-width: 180px;
+}
+.project-chip select option {
+  background: var(--panel-solid);
+  color: var(--text);
+}
+.proj-repo {
+  font-size: 11px;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mini-btn {
+  border: 1px solid var(--border);
+  background: var(--panel-solid);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.6;
+}
+.mini-btn:hover {
+  border-color: var(--border-strong);
+}
+.mini-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+/* session switcher inside the chat panel */
+.session-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.session-bar select {
+  flex: 1;
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 8px;
+  outline: none;
+  cursor: pointer;
+}
+.session-bar select option {
+  background: var(--panel-solid);
+}
+.session-bar select:disabled,
+.project-chip select:disabled {
+  color: var(--faint);
+  cursor: not-allowed;
+}
+/* STOP button reuses .send geometry with a red gradient */
+.send.danger {
+  background: linear-gradient(135deg, var(--red), var(--pink));
+  color: #1a0410;
+}
+
+/* ---------- projects / sessions management modals ---------- */
+.new-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.new-row input {
+  flex: 1;
+  min-width: 0;
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 9px 11px;
+  outline: none;
+}
+.new-row input:focus {
+  border-color: var(--border-strong);
+}
+.new-row .send {
+  padding: 9px 16px;
+  flex-shrink: 0;
+}
+.manage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.manage-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.manage-row.active {
+  border-color: var(--cyan);
+  background: rgba(52, 227, 227, 0.08);
+}
+.manage-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: start;
+  cursor: pointer;
+}
+.manage-name:hover {
+  color: var(--cyan);
+}
+.manage-sub {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  direction: ltr;
+}
+.manage-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.mini-btn.danger {
+  border-color: rgba(255, 107, 129, 0.4);
+}
+.mini-btn.danger:hover:not(:disabled) {
+  background: rgba(255, 107, 129, 0.15);
+}
+.rename-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 9px;
+  outline: none;
+}
+
+/* ---------- repo tab (branches + clone) ---------- */
+.repo-view {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  overflow: auto;
+}
+.repo-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.repo-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.repo-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--cyan);
+  text-decoration: none;
+  direction: ltr;
+}
+.repo-title:hover {
+  text-decoration: underline;
+}
+.repo-status {
+  font-size: 12px;
+  font-weight: 600;
+}
+.repo-status.ok {
+  color: var(--green);
+}
+.repo-status.warn {
+  color: var(--amber);
+}
+.repo-dir {
+  font-size: 11px;
+  color: var(--faint);
+  direction: ltr;
+  word-break: break-all;
+}
+.repo-err {
+  font-size: 12px;
+  color: var(--red);
+}
+.repo-folder-missing {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(255, 179, 71, 0.4);
+  border-radius: 12px;
+  background: rgba(255, 179, 71, 0.08);
+}
+.repo-folder-missing-icon {
+  font-size: 24px;
+  text-align: center;
+}
+.repo-folder-missing-msg {
+  text-align: center;
+  font-size: 13px;
+}
+.repo-folder-missing-msg strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 4px;
+  color: var(--amber);
+}
+.repo-folder-missing-msg p {
+  margin: 0;
+  color: var(--text);
+  direction: ltr;
+  word-break: break-all;
+}
+.repo-folder-missing-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 8px;
+}
+.repo-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.branch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.branch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.branch-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text);
+  direction: ltr;
+}
+.branch-name.current {
+  color: var(--cyan);
+  font-weight: 700;
+}
+.branch-tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+.branch-tag.cur {
+  background: rgba(52, 227, 227, 0.15);
+  color: var(--cyan);
+}
+.branch-tag.def {
+  background: rgba(155, 140, 255, 0.15);
+  color: var(--violet);
+}
 .stats {
   margin-inline-start: auto;
   display: flex;

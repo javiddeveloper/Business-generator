@@ -23,7 +23,10 @@
       </div>
 
       <div class="project-chip" id="projectChip">
-        <span class="muted">پروژه‌ی فعالی نیست</span>
+        <span class="proj-ic">🗂️</span>
+        <select id="projectSelect" title="انتخاب پروژه"></select>
+        <button id="newProjectBtn" class="mini-btn" title="پروژه‌ی جدید">＋</button>
+        <a id="projectRepoLink" class="proj-repo" target="_blank" hidden></a>
       </div>
 
       <div class="stats" id="stats">
@@ -53,6 +56,10 @@
             <h3>فعالیت</h3>
             <span class="live"><span class="live-dot"></span> زنده</span>
           </div>
+          <div class="session-bar">
+            <select id="sessionSelect" title="سشن چت"></select>
+            <button id="newSessionBtn" class="mini-btn" title="چت جدید">＋ چت</button>
+          </div>
           <div class="timeline" id="timeline">
             <div class="empty">در انتظار فعالیت…</div>
           </div>
@@ -75,6 +82,7 @@
               ></textarea>
               <div class="composer-inner-foot">
                 <span class="hint-tip">Enter ارسال · Shift+Enter خط جدید</span>
+                <button id="stopBtn" class="send danger" style="display:none">⏹️ توقف</button>
                 <button id="sendBtn" class="send">ارسال</button>
               </div>
             </div>
@@ -91,11 +99,20 @@
           <button class="mtab" data-mtab="prs">
             🔀 پول‌ریکوئست‌ها <span class="badge" id="prCount">۰</span>
           </button>
+          <button class="mtab" data-mtab="repo">
+            🌿 ریپو <span class="badge" id="branchCount">۰</span>
+          </button>
           <span class="live mtab-live"><span class="live-dot"></span> زنده</span>
         </div>
 
         <div class="mtab-panel" id="view-board">
           <div class="board" id="board"></div>
+        </div>
+
+        <div class="mtab-panel" id="view-repo" style="display:none">
+          <div class="repo-view" id="repoView">
+            <div class="empty">در حال بارگذاری…</div>
+          </div>
         </div>
 
         <div class="mtab-panel" id="view-prs" style="display:none">
@@ -124,6 +141,53 @@
         </div>
         <div class="modal-body detail-body" id="detailBody">
           <div class="empty">در حال بارگذاری…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROJECTS MODAL -->
+    <div class="modal-overlay" id="projectsOverlay" hidden>
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <div>
+            <h2>پروژه‌ها</h2>
+            <p class="modal-sub">پروژه‌ی جدید بساز، یا پروژه‌های موجود را تغییر نام بده / حذف کن.</p>
+          </div>
+          <button class="modal-close" id="projectsClose" title="بستن">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="new-row">
+            <input id="newProjName" placeholder="نام پروژه" />
+            <button class="send" id="newProjCreate">ساخت</button>
+          </div>
+          <div class="new-row" style="margin-bottom: 8px;">
+            <input id="newProjRepoRemote" placeholder="آدرس گیت‌هاب (owner/repo)" dir="ltr" />
+          </div>
+          <div class="new-row" style="margin-bottom: 14px;">
+            <input id="newProjRepoLocal" placeholder="یا مسیر محلی سیستم (مثل D:\ یا /...)" dir="ltr" />
+            <button class="mini-btn" id="browseLocalBtn" type="button" title="انتخاب پوشه از سیستم" style="padding: 0 12px; font-size: 13px;">📁 Browse</button>
+          </div>
+          <div class="manage-list" id="projectsList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SESSIONS (CHATS) MODAL -->
+    <div class="modal-overlay" id="sessionsOverlay" hidden>
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <div>
+            <h2>چت‌ها</h2>
+            <p class="modal-sub" id="sessionsSub">چت جدید بساز، یا چت‌های این پروژه را مدیریت کن.</p>
+          </div>
+          <button class="modal-close" id="sessionsClose" title="بستن">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="new-row">
+            <input id="newSessTitle" placeholder="عنوان چت (اختیاری)" />
+            <button class="send" id="newSessCreate">ساخت</button>
+          </div>
+          <div class="manage-list" id="sessionsList"></div>
         </div>
       </div>
     </div>

@@ -464,14 +464,23 @@ async function bootstrap(repo) {
 // live so fix:/feature: keep working and a new idea stays blocked.
 const PROJECT_COLS = ['todo', 'prog', 'review', 'wait', 'owner'];
 
+// repo of the active project (set by server via activity.run); '' when none.
+const activeRepo = () => normRepo((activity.ctx() || {}).repo || '');
+// keep only cards belonging to the active project (no filter when repo unknown).
+function cardMatches(c, repo) {
+  if (!repo) return true;
+  return normRepo(T.parseMeta(c.desc).repo) === repo;
+}
+
 // ---- find the active project's meta from any populated column -------------
 async function findMeta() {
   const L = config.trello.lists;
+  const repo = activeRepo();
   for (const k of PROJECT_COLS) {
     const cs = await T.listCards(L[k]);
     for (const c of cs) {
       const mm = T.parseMeta(c.desc);
-      if (mm.repo) return mm;
+      if (mm.repo && cardMatches(c, repo)) return mm;
     }
   }
   return null;
@@ -479,8 +488,9 @@ async function findMeta() {
 
 async function countActive() {
   const L = config.trello.lists;
+  const repo = activeRepo();
   let n = 0;
-  for (const k of PROJECT_COLS) n += (await T.listCards(L[k])).length;
+  for (const k of PROJECT_COLS) n += (await T.listCards(L[k])).filter((c) => cardMatches(c, repo)).length;
   return n;
 }
 

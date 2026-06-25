@@ -3,12 +3,26 @@ const $ = (id) => document.getElementById(id);
 const api = (p, opts) => fetch(p, opts).then((r) => r.json());
 
 let currentRepo = null;
-let lastActivitySig = '';
+let lastActivitySig = null;
 let firstRunHandled = false;
 let lastState = null;
 let prFilter = 'open';
 let activeMainTab = 'board';
 let activeSettingsTab = 'tokens';
+
+// ---------- project / session state ----------
+let activeProjectId = null;
+let activeSessionId = null;
+let currentProjects = [];
+let currentSessions = [];
+let busy = false; // a command is running in the active session → lock switching
+const msgCache = new Map(); // sessionId → messages (instant switch without refetch)
+const LS = {
+  proj: 'mc_projectId',
+  sess: (pid) => 'mc_session_' + pid,
+  board: (pid) => 'mc_board_' + pid,
+  projects: 'mc_projects',
+};
 
 // ---------- helpers ----------
 const FA_DIGITS = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
@@ -29,13 +43,447 @@ function el(tag, cls, text) {
 }
 const ROLE_LABEL = { user: 'تو', agent: 'سیستم', system: 'سیستم' };
 
+// ---------- projects & sessions ----------
+const normRepo = (u) =>
+  String(u || '').trim().replace(/\.git$/, '').replace(/^https?:\/\/github\.com\//i, '').replace(/^github\.com\//i, '');
+
+// Disable project/session switching and turn the send button into STOP while a
+// command is running, so the user can't switch context mid-flight.
+function lockUI(on) {
+  busy = on;
+  $('projectSelect').disabled = on;
+  $('newProjectBtn').disabled = on;
+  $('sessionSelect').disabled = on;
+  $('newSessionBtn').disabled = on;
+  $('sendBtn').style.display = on ? 'none' : '';
+  $('stopBtn').style.display = on ? '' : 'none';
+}
+
+async function loadProjects() {
+  try {
+    currentProjects = await api('/api/projects');
+    localStorage.setItem(LS.projects, JSON.stringify(currentProjects));
+  } catch {
+    currentProjects = JSON.parse(localStorage.getItem(LS.projects) || '[]');
+  }
+  if (!currentProjects.length) return;
+  const stored = localStorage.getItem(LS.proj);
+  activeProjectId = currentProjects.some((p) => p.id === stored) ? stored : currentProjects[0].id;
+  localStorage.setItem(LS.proj, activeProjectId);
+  renderProjects();
+}
+
+function renderProjects() {
+  const sel = $('projectSelect');
+  sel.innerHTML = '';
+  for (const p of currentProjects) {
+    const o = el('option', null, p.name);
+    o.value = p.id;
+    sel.appendChild(o);
+  }
+  if (activeProjectId) sel.value = activeProjectId;
+}
+
+async function loadSessions() {
+  let sessions = [];
+  try {
+    sessions = await api('/api/projects/' + activeProjectId + '/sessions');
+  } catch {}
+  if (!sessions.length) {
+    try {
+      const s = await api('/api/projects/' + activeProjectId + '/sessions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'چت اصلی' }),
+      });
+      sessions = [s];
+    } catch {}
+  }
+  currentSessions = sessions;
+  const key = LS.sess(activeProjectId);
+  const stored = localStorage.getItem(key);
+  activeSessionId = sessions.some((s) => s.id === stored) ? stored : (sessions[sessions.length - 1] || {}).id || null;
+  if (activeSessionId) localStorage.setItem(key, activeSessionId);
+  renderSessions();
+}
+
+function renderSessions() {
+  const sel = $('sessionSelect');
+  sel.innerHTML = '';
+  for (const s of currentSessions) {
+    const o = el('option', null, s.title);
+    o.value = s.id;
+    sel.appendChild(o);
+  }
+  if (activeSessionId) sel.value = activeSessionId;
+}
+
+// paint the active session from cache (or clear) so a switch shows no stale chat
+function paintCachedSession() {
+  const m = msgCache.get(activeSessionId);
+  if (m) renderMessages(m);
+  else $('timeline').innerHTML = '';
+}
+
+async function selectProject(pid) {
+  if (busy || pid === activeProjectId) return;
+  activeProjectId = pid;
+  localStorage.setItem(LS.proj, pid);
+  renderProjects();
+  await loadSessions();
+  paintCachedBoard();
+  paintCachedSession();
+  lastActivitySig = null; // force a re-render even if the new session is empty
+  await Promise.all([refreshActivity(), refreshState()]);
+  if (activeMainTab === 'repo') refreshRepo();
+}
+
+async function selectSession(sid) {
+  if (busy || sid === activeSessionId) return;
+  activeSessionId = sid;
+  localStorage.setItem(LS.sess(activeProjectId), sid);
+  $('sessionSelect').value = sid; // keep the dropdown in sync when called programmatically
+  paintCachedSession();
+  lastActivitySig = null;
+  await refreshActivity();
+}
+
+// paint the last cached board for the active project instantly (before live fetch)
+function paintCachedBoard() {
+  try {
+    const snap = JSON.parse(localStorage.getItem(LS.board(activeProjectId)) || 'null');
+    if (snap && snap.columns) renderBoard(snap.columns);
+    else $('board').innerHTML = '';
+  } catch {}
+}
+
+// ----- projects modal (create / rename / delete) -----
+const projectsOverlay = $('projectsOverlay');
+function openProjects() {
+  if (busy) return;
+  $('newProjName').value = '';
+  $('newProjRepoRemote').value = '';
+  $('newProjRepoLocal').value = '';
+  renderProjectsList();
+  projectsOverlay.hidden = false;
+  $('newProjName').focus();
+}
+function closeProjects() { projectsOverlay.hidden = true; }
+
+function renderProjectsList() {
+  const box = $('projectsList');
+  box.innerHTML = '';
+  for (const p of currentProjects) {
+    const row = el('div', 'manage-row' + (p.id === activeProjectId ? ' active' : ''));
+    const main = el('button', 'manage-name');
+    main.appendChild(el('span', null, p.name));
+    if (p.repo) main.appendChild(el('span', 'manage-sub', p.repo));
+    main.addEventListener('click', () => { closeProjects(); selectProject(p.id); });
+    row.appendChild(main);
+
+    const acts = el('div', 'manage-actions');
+    const ren = el('button', 'mini-btn', '✏️');
+    ren.title = 'تغییر نام';
+    ren.addEventListener('click', () => inlineRename(main, p.name, async (val) => {
+      await api('/api/projects/' + p.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: val }) });
+      await loadProjects(); renderProjectsList();
+    }));
+    acts.appendChild(ren);
+    const del = el('button', 'mini-btn danger', '🗑');
+    del.title = 'حذف';
+    del.disabled = currentProjects.length <= 1;
+    del.addEventListener('click', () => deleteProject(p.id));
+    acts.appendChild(del);
+    row.appendChild(acts);
+    box.appendChild(row);
+  }
+}
+
+async function createProjectFromModal() {
+  const name = $('newProjName').value.trim();
+  if (!name) { $('newProjName').focus(); return; }
+  let repo = $('newProjRepoLocal').value.trim();
+  if (!repo) repo = $('newProjRepoRemote').value.trim();
+  try {
+    const p = await api('/api/projects', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, repo }),
+    });
+    await loadProjects();
+    closeProjects();
+    activeProjectId = null; // bypass the equality guard so selectProject runs
+    await selectProject(p.id);
+  } catch (e) {}
+}
+
+async function deleteProject(pid) {
+  if (currentProjects.length <= 1) return;
+  if (!confirm('این پروژه و همه‌ی چت‌هایش حذف شود؟')) return;
+  try {
+    await api('/api/projects/' + pid, { method: 'DELETE' });
+    await loadProjects();
+    renderProjectsList();
+    if (pid === activeProjectId) {
+      activeProjectId = null;
+      await selectProject(currentProjects[0].id);
+    }
+  } catch (e) {}
+}
+
+// ----- sessions (chats) modal -----
+const sessionsOverlay = $('sessionsOverlay');
+function openSessions() {
+  if (busy) return;
+  $('newSessTitle').value = '';
+  renderSessionsList();
+  sessionsOverlay.hidden = false;
+  $('newSessTitle').focus();
+}
+function closeSessions() { sessionsOverlay.hidden = true; }
+
+function renderSessionsList() {
+  const box = $('sessionsList');
+  box.innerHTML = '';
+  for (const s of currentSessions) {
+    const row = el('div', 'manage-row' + (s.id === activeSessionId ? ' active' : ''));
+    const main = el('button', 'manage-name');
+    main.appendChild(el('span', null, s.title));
+    main.addEventListener('click', () => { closeSessions(); selectSession(s.id); });
+    row.appendChild(main);
+
+    const acts = el('div', 'manage-actions');
+    const ren = el('button', 'mini-btn', '✏️');
+    ren.title = 'تغییر نام';
+    ren.addEventListener('click', () => inlineRename(main, s.title, async (val) => {
+      await api('/api/sessions/' + s.id + '?projectId=' + encodeURIComponent(activeProjectId), {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: val }),
+      });
+      await loadSessions(); renderSessionsList();
+    }));
+    acts.appendChild(ren);
+    const del = el('button', 'mini-btn danger', '🗑');
+    del.title = 'حذف';
+    del.disabled = currentSessions.length <= 1;
+    del.addEventListener('click', () => deleteSession(s.id));
+    acts.appendChild(del);
+    row.appendChild(acts);
+    box.appendChild(row);
+  }
+}
+
+async function createSessionFromModal() {
+  const title = $('newSessTitle').value.trim();
+  try {
+    const s = await api('/api/projects/' + activeProjectId + '/sessions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }),
+    });
+    await loadSessions();
+    closeSessions();
+    activeSessionId = null;
+    await selectSession(s.id);
+  } catch (e) {}
+}
+
+async function deleteSession(sid) {
+  if (currentSessions.length <= 1) return;
+  if (!confirm('این چت حذف شود؟')) return;
+  try {
+    await api('/api/sessions/' + sid + '?projectId=' + encodeURIComponent(activeProjectId), { method: 'DELETE' });
+    msgCache.delete(sid);
+    await loadSessions();
+    renderSessionsList();
+    if (sid === activeSessionId) { activeSessionId = null; await selectSession(currentSessions[currentSessions.length - 1].id); }
+  } catch (e) {}
+}
+
+// shared: turn a name button into an inline edit field (no native prompt)
+function inlineRename(nameEl, current, onSave) {
+  const row = nameEl.parentElement;
+  const input = el('input', 'rename-input');
+  input.value = current;
+  nameEl.replaceWith(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const finish = async (save) => {
+    if (done) return; done = true;
+    const val = input.value.trim();
+    if (save && val && val !== current) await onSave(val);
+    else if (row.isConnected) input.replaceWith(nameEl);
+  };
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    if (e.key === 'Escape') finish(false);
+  });
+  input.addEventListener('blur', () => finish(true));
+}
+
+$('projectSelect').addEventListener('change', (e) => selectProject(e.target.value));
+$('sessionSelect').addEventListener('change', (e) => selectSession(e.target.value));
+$('newProjectBtn').addEventListener('click', openProjects);
+$('newSessionBtn').addEventListener('click', openSessions);
+$('projectsClose').addEventListener('click', closeProjects);
+$('sessionsClose').addEventListener('click', closeSessions);
+$('newProjCreate').addEventListener('click', createProjectFromModal);
+$('newSessCreate').addEventListener('click', createSessionFromModal);
+$('newProjName').addEventListener('keydown', (e) => { if (e.key === 'Enter') createProjectFromModal(); });
+$('newProjRepoRemote').addEventListener('keydown', (e) => { if (e.key === 'Enter') createProjectFromModal(); });
+$('newProjRepoLocal').addEventListener('keydown', (e) => { if (e.key === 'Enter') createProjectFromModal(); });
+$('newSessTitle').addEventListener('keydown', (e) => { if (e.key === 'Enter') createSessionFromModal(); });
+$('browseLocalBtn').addEventListener('click', async () => {
+  $('browseLocalBtn').disabled = true;
+  $('browseLocalBtn').textContent = '⏳ ...';
+  try {
+    const res = await api('/api/browse', { method: 'POST' });
+    if (res && res.path) $('newProjRepoLocal').value = res.path;
+  } catch (e) {}
+  $('browseLocalBtn').disabled = false;
+  $('browseLocalBtn').textContent = '📁 Browse';
+});
+projectsOverlay.addEventListener('click', (e) => { if (e.target === projectsOverlay) closeProjects(); });
+sessionsOverlay.addEventListener('click', (e) => { if (e.target === sessionsOverlay) closeSessions(); });
+
 // ---------- main tabs ----------
 function switchMainTab(tab) {
   activeMainTab = tab;
   [...document.querySelectorAll('.mtab')].forEach((b) => b.classList.toggle('active', b.dataset.mtab === tab));
   $('view-board').style.display = tab === 'board' ? 'flex' : 'none';
   $('view-prs').style.display = tab === 'prs' ? 'flex' : 'none';
+  $('view-repo').style.display = tab === 'repo' ? 'flex' : 'none';
   if (tab === 'prs') refreshPRs();
+  if (tab === 'repo') refreshRepo();
+}
+
+// ---------- repo tab (branches + local clone) ----------
+async function refreshRepo() {
+  const box = $('repoView');
+  if (!activeProjectId) { box.innerHTML = ''; box.appendChild(el('div', 'empty', 'پروژه‌ای انتخاب نشده.')); return; }
+  box.innerHTML = '';
+  box.appendChild(el('div', 'empty', 'در حال بارگذاری…'));
+  let r;
+  try {
+    r = await api('/api/repo?projectId=' + encodeURIComponent(activeProjectId));
+  } catch (e) {
+    box.innerHTML = ''; box.appendChild(el('div', 'empty', 'خطا در دریافت اطلاعات ریپو.')); return;
+  }
+  renderRepo(r);
+}
+
+function renderRepo(r) {
+  const box = $('repoView');
+  box.innerHTML = '';
+  if (!r || !r.ok) {
+    box.appendChild(el('div', 'empty', (r && r.error) || 'ریپوی این پروژه مشخص نیست.'));
+    $('branchCount').textContent = faNum(0);
+    return;
+  }
+
+  const isLocal = r.isLocalPath;
+
+  // ---- folder was deleted by the user after cloning ----
+  if (r.folderMissing) {
+    const warn = el('div', 'repo-folder-missing');
+    warn.innerHTML = '<span class="repo-folder-missing-icon">⚠️</span>';
+    const msg = el('div', 'repo-folder-missing-msg');
+    msg.appendChild(el('strong', null, isLocal ? 'پوشهٔ محلی پیدا نشد' : 'پوشهٔ کلون پیدا نشد'));
+    msg.appendChild(el('p', null, 'مسیر ' + r.dir + ' وجود ندارد.'));
+    warn.appendChild(msg);
+
+    const acts = el('div', 'repo-folder-missing-actions');
+
+    if (!isLocal) {
+      const reCloneBtn = el('button', 'send', '📥 کلون مجدد');
+      reCloneBtn.addEventListener('click', async () => {
+        reCloneBtn.disabled = true;
+        reCloneBtn.textContent = 'در حال کلون…';
+        let res;
+        try {
+          res = await api('/api/clone', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId: activeProjectId }) });
+        } catch (e) { res = { ok: false, error: e.message }; }
+        if (res && res.ok) renderRepo(res);
+        else {
+          reCloneBtn.disabled = false;
+          reCloneBtn.textContent = '📥 کلون مجدد';
+          const err = el('div', 'repo-err', '⚠️ ' + ((res && res.error) || 'کلون ناموفق بود'));
+          box.appendChild(err);
+        }
+      });
+      acts.appendChild(reCloneBtn);
+    }
+
+    const delBtn = el('button', 'mini-btn danger', '🗑 حذف پروژه');
+    delBtn.addEventListener('click', async () => {
+      if (!confirm('پروژه از لیست حذف شود؟')) return;
+      await deleteProject(activeProjectId);
+    });
+    acts.appendChild(delBtn);
+    warn.appendChild(acts);
+    box.appendChild(warn);
+    $('branchCount').textContent = faNum(0);
+    return;
+  }
+
+  // header: repo slug + clone status + clone/update button
+  const head = el('div', 'repo-head');
+  const info = el('div', 'repo-info');
+  
+  if (isLocal) {
+    const title = el('span', 'repo-title', r.repo);
+    info.appendChild(title);
+    const st = el('span', 'repo-status ok', '✓ پروژه محلی');
+    info.appendChild(st);
+  } else {
+    const title = el('a', 'repo-title', r.repo);
+    title.href = 'https://github.com/' + r.repo;
+    title.target = '_blank';
+    info.appendChild(title);
+    const st = el('span', 'repo-status ' + (r.cloned ? 'ok' : 'warn'), r.cloned ? '✓ کلون‌شده روی این سیستم' : '⬇️ هنوز کلون نشده');
+    info.appendChild(st);
+  }
+  
+  if (r.dir) info.appendChild(el('span', 'repo-dir', r.dir));
+  head.appendChild(info);
+
+  if (!isLocal) {
+    const cloneBtn = el('button', 'send', r.cloned ? '🔄 به‌روزرسانی' : '📥 کلون');
+    cloneBtn.addEventListener('click', async () => {
+      cloneBtn.disabled = true;
+      cloneBtn.textContent = r.cloned ? 'در حال به‌روزرسانی…' : 'در حال کلون…';
+      let res;
+      try {
+        res = await api('/api/clone', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId: activeProjectId }) });
+      } catch (e) { res = { ok: false, error: e.message }; }
+      if (res && res.ok) renderRepo(res);
+      else {
+        cloneBtn.disabled = false;
+        cloneBtn.textContent = r.cloned ? '🔄 به‌روزرسانی' : '📥 کلون';
+        const err = el('div', 'repo-err', '⚠️ ' + ((res && res.error) || 'کلون ناموفق بود'));
+        box.appendChild(err);
+      }
+    });
+    head.appendChild(cloneBtn);
+  }
+  
+  box.appendChild(head);
+
+  // branches
+  const branches = r.branches || [];
+  $('branchCount').textContent = faNum(branches.length);
+  if (r.branchesError) box.appendChild(el('div', 'repo-err', '⚠️ ' + r.branchesError));
+  const bhead = el('div', 'repo-section-title', '🌿 شاخه‌ها (' + faNum(branches.length) + ')');
+  box.appendChild(bhead);
+  if (!branches.length) {
+    box.appendChild(el('div', 'empty', 'شاخه‌ای پیدا نشد.'));
+    return;
+  }
+  const list = el('div', 'branch-list');
+  for (const b of branches) {
+    const row = el('div', 'branch-row');
+    const isCur = b === r.current;
+    const isDef = b === r.defaultBranch;
+    row.appendChild(el('span', 'branch-name' + (isCur ? ' current' : ''), b));
+    if (isCur) row.appendChild(el('span', 'branch-tag cur', 'فعلی'));
+    if (isDef) row.appendChild(el('span', 'branch-tag def', 'پیش‌فرض'));
+    list.appendChild(row);
+  }
+  box.appendChild(list);
 }
 
 $('mainTabs').addEventListener('click', (e) => {
@@ -46,9 +494,10 @@ $('mainTabs').addEventListener('click', (e) => {
 
 // ---------- state / board ----------
 async function refreshState() {
+  if (!activeProjectId) return;
   let s;
   try {
-    s = await api('/api/state');
+    s = await api('/api/state?projectId=' + encodeURIComponent(activeProjectId));
   } catch (e) {
     setHealth('bad', 'سرور خاموش است');
     return;
@@ -59,18 +508,24 @@ async function refreshState() {
     openSettings(true);
   }
 
-  const chip = $('projectChip');
-  chip.innerHTML = '';
-  if (s.project && s.project.repo) {
-    currentRepo = s.project.repo;
-    chip.appendChild(el('span', null, '🗂️ ' + (s.project.project || s.project.repo)));
-    const a = el('a', null, s.project.repo);
-    a.href = 'https://github.com/' + s.project.repo;
-    a.target = '_blank';
-    chip.appendChild(a);
+  // project repo link (the chip itself holds the switcher, so only touch the link)
+  const link = $('projectRepoLink');
+  currentRepo = normRepo((s.project && s.project.repo) || '') || null;
+  const isLocal = currentRepo && /^([a-zA-Z]:[/\\]|\\\\|\/|~)/.test(currentRepo);
+  
+  if (currentRepo) {
+    if (isLocal) {
+      link.textContent = 'مسیر محلی';
+      link.href = '#';
+      link.onclick = (e) => { e.preventDefault(); switchMainTab('repo'); };
+    } else {
+      link.textContent = currentRepo;
+      link.href = 'https://github.com/' + currentRepo;
+      link.onclick = null;
+    }
+    link.hidden = false;
   } else {
-    currentRepo = null;
-    chip.appendChild(el('span', 'muted', 'پروژه‌ی فعالی نیست'));
+    link.hidden = true;
   }
 
   $('statTasks').textContent = faNum(s.totals.tasks);
@@ -82,7 +537,14 @@ async function refreshState() {
   else if (!b.ready) setHealth('warn', 'پل: ' + (b.detail || 'آماده نیست'));
   else setHealth('ok', 'پل آماده است');
 
+  // keep the UI locked if the active session has a command running (survives reload)
+  const sessionBusy = Array.isArray(s.running) && s.running.indexOf(activeSessionId) >= 0;
+  if (sessionBusy && !busy) lockUI(true);
+  else if (!sessionBusy && busy) lockUI(false);
+
   renderBoard(s.columns);
+  // cache the board snapshot for an instant paint on the next project switch
+  try { localStorage.setItem(LS.board(activeProjectId), JSON.stringify({ columns: s.columns, totals: s.totals })); } catch {}
   lastState = s;
 }
 
@@ -341,7 +803,7 @@ function renderCardAction(body, cardId, colKey) {
       }
       if (done) btn.textContent = '✅ انجام شد';
       else { btn.disabled = false; btn.textContent = cfg.label; }
-      lastActivitySig = '';
+      lastActivitySig = null;
       refreshActivity(); refreshState();
       if (activeMainTab === 'prs') refreshPRs();
     } else {
@@ -349,7 +811,7 @@ function renderCardAction(body, cardId, colKey) {
       msg.textContent = '⚠️ ' + ((r && r.error) || (res && res.error) || 'اجرا ناموفق بود');
       btn.disabled = false;
       btn.textContent = '🔁 تلاش دوباره';
-      lastActivitySig = '';
+      lastActivitySig = null;
       refreshActivity();
     }
   });
@@ -439,17 +901,7 @@ $('detailClose').addEventListener('click', closeDetail);
 detailOverlay.addEventListener('click', (e) => { if (e.target === detailOverlay) closeDetail(); });
 
 // ---------- activity / chat ----------
-async function refreshActivity() {
-  let events = [];
-  try {
-    events = await api('/api/activity');
-  } catch (e) {
-    return;
-  }
-  const sig = events.map((e) => e.id).join(',');
-  if (sig === lastActivitySig) return;
-  lastActivitySig = sig;
-
+function renderMessages(events) {
   const tl = $('timeline');
   const atBottom = tl.scrollHeight - tl.scrollTop - tl.clientHeight < 60;
   tl.innerHTML = '';
@@ -472,6 +924,23 @@ async function refreshActivity() {
     tl.appendChild(m);
   }
   if (atBottom) tl.scrollTop = tl.scrollHeight;
+}
+
+async function refreshActivity() {
+  if (!activeProjectId || !activeSessionId) return;
+  const sid = activeSessionId;
+  let events = [];
+  try {
+    events = await api('/api/messages?projectId=' + encodeURIComponent(activeProjectId) + '&sessionId=' + encodeURIComponent(sid));
+  } catch (e) {
+    return;
+  }
+  if (sid !== activeSessionId) return; // session changed mid-fetch; drop stale result
+  msgCache.set(sid, events);
+  const sig = events.map((e) => e.id).join(',');
+  if (sig === lastActivitySig) return;
+  lastActivitySig = sig;
+  renderMessages(events);
 }
 
 // ---------- composer ----------
@@ -501,23 +970,42 @@ $('quick').addEventListener('click', (e) => {
 });
 
 async function send() {
+  if (busy) return;
   const text = composer.value.trim();
-  if (!text) return;
-  sendBtn.disabled = true;
+  if (!text || !activeProjectId || !activeSessionId) return;
+  const sid = activeSessionId;
   composer.value = '';
   autoGrow();
+  lockUI(true);
+  // optimistic echo so the user sees their message immediately
+  lastActivitySig = null;
+  renderMessages([...(msgCache.get(sid) || []), { id: 't' + Date.now(), ts: Date.now(), role: 'user', text }]);
   try {
     await api('/api/command', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, projectId: activeProjectId, sessionId: sid }),
     });
   } catch (e) {}
-  sendBtn.disabled = false;
-  lastActivitySig = '';
+  lockUI(false);
+  lastActivitySig = null;
   await Promise.all([refreshActivity(), refreshState()]);
 }
 sendBtn.addEventListener('click', send);
+
+async function stop() {
+  try {
+    await api('/api/stop', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId: activeProjectId, sessionId: activeSessionId }),
+    });
+  } catch (e) {}
+  lockUI(false);
+  lastActivitySig = null;
+  await refreshActivity();
+}
+$('stopBtn').addEventListener('click', stop);
 
 // ---------- settings ----------
 const overlay = $('settingsOverlay');
@@ -684,10 +1172,14 @@ $('prFilters').addEventListener('click', (e) => {
   refreshPRs();
 });
 
-// ---------- loops ----------
-refreshState();
-refreshActivity();
-refreshModels();
-setInterval(refreshState, 5_000);
-setInterval(refreshActivity, 5_000);
-setInterval(refreshModels, 10_000);
+// ---------- boot ----------
+async function init() {
+  await loadProjects();
+  if (activeProjectId) await loadSessions();
+  paintCachedBoard();
+  await Promise.all([refreshActivity(), refreshState(), refreshModels()]);
+  setInterval(refreshState, 5_000);
+  setInterval(refreshActivity, 5_000);
+  setInterval(refreshModels, 10_000);
+}
+init();

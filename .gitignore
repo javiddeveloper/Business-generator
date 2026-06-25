@@ -13,3 +13,6 @@ node_modules/
 
 # Bridge runtime state (active model selection)
 model-state.json
+
+# Dashboard runtime state (projects, chat sessions, board cache)
+data/
