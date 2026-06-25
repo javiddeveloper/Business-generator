@@ -41,6 +41,21 @@ const normRepo = (u) => {
   return parts.length >= 2 ? parts[0] + '/' + parts[1] : s;
 };
 
+// Resolve the effective GitHub owner/repo for a project.
+// If the stored repo is a local path, read remote.origin.url from .git/config.
+async function resolveRepo(project) {
+  if (!project || !project.repo) return '';
+  const stored = project.repo;
+  // If it looks like a GitHub slug already (owner/repo), use it directly
+  if (/^[^/]+\/[^/]+$/.test(normRepo(stored))) return stored;
+  // Local path — try to read GitHub remote from .git/config
+  try {
+    const st = await repo.status(stored);
+    if (st && st.githubRepo) return st.githubRepo;
+  } catch {}
+  return stored;
+}
+
 // sessionId -> AbortController for the command currently running in that session.
 // Drives the STOP button and the "no switching while busy" lock.
 const running = new Map();
@@ -399,9 +414,10 @@ const server = http.createServer(async (req, res) => {
       const text = (body.text || '').trim();
       if (!text) return sendJson(res, 400, { error: 'empty command' });
       const project = body.projectId ? store.getProject(body.projectId) : null;
+      const effectiveRepo = await resolveRepo(project);
       dropState();
       try {
-        const result = await withRun(body.projectId, body.sessionId, project && project.repo, () => owner.runCommand(text));
+        const result = await withRun(body.projectId, body.sessionId, effectiveRepo, () => owner.runCommand(text));
         return sendJson(res, 200, { ok: true, result });
       } catch (e) {
         if (!isAbort(e)) activity.run({ projectId: body.projectId, sessionId: body.sessionId }, () => activity.push('system', '⚠️ ' + e.message));
@@ -413,9 +429,10 @@ const server = http.createServer(async (req, res) => {
       const cardId = (body.cardId || '').trim();
       if (!cardId) return sendJson(res, 400, { error: 'missing cardId' });
       const project = body.projectId ? store.getProject(body.projectId) : null;
+      const effectiveRepo = await resolveRepo(project);
       dropState();
       try {
-        const result = await withRun(body.projectId, body.sessionId, project && project.repo, () => owner.runCodeTask(cardId));
+        const result = await withRun(body.projectId, body.sessionId, effectiveRepo, () => owner.runCodeTask(cardId));
         return sendJson(res, 200, { ok: !!(result && result.ok), result });
       } catch (e) {
         return sendJson(res, 200, { ok: false, error: isAbort(e) ? 'stopped' : e.message });
@@ -426,9 +443,10 @@ const server = http.createServer(async (req, res) => {
       const cardId = (body.cardId || '').trim();
       if (!cardId) return sendJson(res, 400, { error: 'missing cardId' });
       const project = body.projectId ? store.getProject(body.projectId) : null;
+      const effectiveRepo = await resolveRepo(project);
       dropState();
       try {
-        const result = await withRun(body.projectId, body.sessionId, project && project.repo, () => owner.runReview(cardId));
+        const result = await withRun(body.projectId, body.sessionId, effectiveRepo, () => owner.runReview(cardId));
         return sendJson(res, 200, { ok: !!(result && result.ok), result });
       } catch (e) {
         return sendJson(res, 200, { ok: false, error: isAbort(e) ? 'stopped' : e.message });
