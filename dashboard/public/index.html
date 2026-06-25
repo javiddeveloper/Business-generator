@@ -299,9 +299,9 @@
             <span>GapGPT</span>
           </button>
           <button class="stab" data-btab="anthropic">
-            <!-- Atom/orbit icon for Antigravity/Gemini -->
+            <!-- Gemini/Google icon -->
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><path d="M20.2 20.2c2.04-2.03.02-7.36-4.5-11.9-4.54-4.52-9.87-6.54-11.9-4.5-2.04 2.03-.02 7.36 4.5 11.9 4.54 4.52 9.87 6.54 11.9 4.5z"/><path d="M15.7 15.7c4.52-4.54 6.54-9.87 4.5-11.9-2.03-2.04-7.36-.02-11.9 4.5-4.52 4.54-6.54 9.87-4.5 11.9 2.03 2.04 7.36.02 11.9-4.5z"/></svg>
-            <span>Antigravity</span>
+            <span>Gemini CLI</span>
           </button>
         </div>
         <!-- ═══════════ CLAUDE ═══════════ -->
@@ -358,55 +358,48 @@ sudo apt-get install -y nodejs</code><button class="bh-copy" title="کپی">⧉<
           </div>
         </div>
 
-        <!-- ═══════════ ANTIGRAVITY (Gemini) ═══════════ -->
+        <!-- ═══════════ GEMINI CLI ═══════════ -->
         <div class="modal-body" id="bridgeHelpAnthropic" style="display:none">
-          <div class="bh-note">Antigravity یک CLI است که دسترسی رایگان به Gemini را فراهم می‌کند. پل همان <code>claude-bridge.js</code> را استفاده می‌کند.</div>
+          <div class="bh-note">Gemini CLI ابزار رسمی Google برای استفاده از Gemini است — رایگان با اکانت Google. نصب از طریق npm انجام می‌شود (Node.js لازم دارد).</div>
 
-          <div class="bh-section-title">① نصب Antigravity (agy)</div>
-          <div class="bh-os-tabs" data-group="agy-install">
+          <div class="bh-section-title">① نصب Node.js (اگر ندارید)</div>
+          <div class="bh-os-tabs" data-group="gemini-node">
             <button class="bh-os-tab active" data-os="mac"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> Mac</button>
             <button class="bh-os-tab" data-os="win"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg> Windows</button>
             <button class="bh-os-tab" data-os="linux"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 12h6M9 16h6M9 8h6"/></svg> Linux</button>
           </div>
-          <div class="bh-os-panel active" data-group="agy-install" data-os="mac">
-            <div class="bh-step"><div class="bh-step-label">نصب از طریق pip (Python لازم دارد)</div>
-              <div class="bh-cmd"><code>pip install antigravity-cli</code><button class="bh-copy" title="کپی">⧉</button></div>
-            </div>
-            <div class="bh-step"><div class="bh-step-label">ورود با اکانت Google</div>
-              <div class="bh-cmd"><code>agy login</code><button class="bh-copy" title="کپی">⧉</button></div>
-              <div class="bh-note">مرورگر باز می‌شود — با Google وارد شوید تا به Gemini دسترسی بگیرید.</div>
-            </div>
-            <div class="bh-step"><div class="bh-step-label">تست</div>
-              <div class="bh-cmd"><code>agy -p "سلام"</code><button class="bh-copy" title="کپی">⧉</button></div>
-            </div>
+          <div class="bh-os-panel active" data-group="gemini-node" data-os="mac">
+            <div class="bh-cmd"><code>brew install node</code><button class="bh-copy" title="کپی">⧉</button></div>
           </div>
-          <div class="bh-os-panel" data-group="agy-install" data-os="win">
-            <div class="bh-step"><div class="bh-step-label">نصب Python (اگر ندارید)</div>
-              <div class="bh-cmd"><code>winget install Python.Python.3</code><button class="bh-copy" title="کپی">⧉</button></div>
-            </div>
-            <div class="bh-step"><div class="bh-step-label">نصب Antigravity</div>
-              <div class="bh-cmd"><code>pip install antigravity-cli</code><button class="bh-copy" title="کپی">⧉</button></div>
-            </div>
-            <div class="bh-step"><div class="bh-step-label">ورود</div>
-              <div class="bh-cmd"><code>agy login</code><button class="bh-copy" title="کپی">⧉</button></div>
-            </div>
+          <div class="bh-os-panel" data-group="gemini-node" data-os="win">
+            <div class="bh-cmd"><code>winget install OpenJS.NodeJS</code><button class="bh-copy" title="کپی">⧉</button></div>
           </div>
-          <div class="bh-os-panel" data-group="agy-install" data-os="linux">
-            <div class="bh-step"><div class="bh-step-label">نصب Python (اگر ندارید)</div>
-              <div class="bh-cmd"><code>sudo apt-get install python3 python3-pip</code><button class="bh-copy" title="کپی">⧉</button></div>
-            </div>
-            <div class="bh-step"><div class="bh-step-label">نصب Antigravity</div>
-              <div class="bh-cmd"><code>pip3 install antigravity-cli</code><button class="bh-copy" title="کپی">⧉</button></div>
-            </div>
-            <div class="bh-step"><div class="bh-step-label">ورود</div>
-              <div class="bh-cmd"><code>agy login</code><button class="bh-copy" title="کپی">⧉</button></div>
-            </div>
+          <div class="bh-os-panel" data-group="gemini-node" data-os="linux">
+            <div class="bh-cmd"><code>curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+sudo apt-get install -y nodejs</code><button class="bh-copy" title="کپی">⧉</button></div>
           </div>
 
-          <div class="bh-section-title">② اجرای پل</div>
-          <div class="bh-step"><div class="bh-step-label">ترمینال جدید باز کنید:</div>
+          <div class="bh-section-title">② نصب Gemini CLI</div>
+          <div class="bh-step">
+            <div class="bh-cmd"><code>npm install -g @google/gemini-cli</code><button class="bh-copy" title="کپی">⧉</button></div>
+          </div>
+
+          <div class="bh-section-title">③ ورود با اکانت Google</div>
+          <div class="bh-step">
+            <div class="bh-cmd"><code>gemini</code><button class="bh-copy" title="کپی">⧉</button></div>
+            <div class="bh-note">دستور بالا مرورگر را باز می‌کند — با اکانت Google خود وارد شوید. بعد از ورود می‌توانید ترمینال را ببندید.</div>
+          </div>
+
+          <div class="bh-section-title">④ تست سریع</div>
+          <div class="bh-step">
+            <div class="bh-cmd"><code>gemini -p "سلام"</code><button class="bh-copy" title="کپی">⧉</button></div>
+            <div class="bh-note">اگر جواب گرفتید، آماده است. اگر خطا داد، دوباره <code>gemini</code> را اجرا کنید تا login کامل شود.</div>
+          </div>
+
+          <div class="bh-section-title">⑤ اجرای پل</div>
+          <div class="bh-step">
             <div class="bh-cmd bh-bridge-run"><code>node claude-bridge.js</code><button class="bh-copy" title="کپی">⧉</button></div>
-            <div class="bh-note">سپس از داشبورد، موتور را به «Gemini (Antigravity)» تغییر دهید.</div>
+            <div class="bh-note">سپس از داشبورد، موتور را به «Gemini CLI» تغییر دهید.</div>
           </div>
         </div>
 

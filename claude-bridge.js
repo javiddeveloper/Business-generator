@@ -30,7 +30,7 @@ const SECRETS_PATH = path.join(__dirname, 'secrets.env');
 // kind 'http' → POST OpenAI-compatible /chat/completions
 const MODELS = [
   { id: 'claude-pro', label: 'Claude (Pro)', kind: 'cli', bin: 'claude', model: process.env.CLAUDE_MODEL || '' },
-  { id: 'gemini-antigravity', label: 'Gemini (Antigravity)', kind: 'cli', bin: 'agy', model: 'gemini-3-pro' },
+  { id: 'gemini-antigravity', label: 'Gemini CLI', kind: 'cli', bin: 'gemini', model: 'gemini-2.5-pro' },
   { id: 'gapgpt', label: 'GapGPT', kind: 'http', model: 'gpt-4o', keyEnv: 'GAPGPT_API_KEY', baseEnv: 'GAPGPT_BASE_URL', baseDefault: 'https://api.gapgpt.app/v1' },
 ];
 
@@ -182,11 +182,10 @@ function agentArgs(bin, model) {
     args.push('-p', '--output-format', 'json');
     if (model) args.push('--model', model);
     args.push('--dangerously-skip-permissions', '--allowedTools', 'Read Edit Write Bash Grep');
-  } else if (bin === 'agy' || bin === 'antigravity') {
-    // Antigravity CLI typically uses --json for output and --auto-approve for headless
-    args.push('--prompt', '-', '--json');
+  } else if (bin === 'gemini') {
+    args.push('-p', '--output-format', 'json');
     if (model) args.push('--model', model);
-    args.push('--auto-approve');
+    args.push('-y');
   } else {
     args.push('-p', '--output-format', 'json');
     if (model) args.push('--model', model);
