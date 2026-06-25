@@ -22,8 +22,24 @@ const { deleteClone } = repo;
 // guarantee at least one project so the UI is never empty
 store.bootstrap('');
 
-const normRepo = (u) =>
-  String(u || '').trim().replace(/\.git$/, '').replace(/^https?:\/\/github\.com\//i, '').replace(/^github\.com\//i, '');
+const normRepo = (u) => {
+  let s = String(u || '').trim().replace(/\.git$/, '');
+  const ghIdx = s.toLowerCase().indexOf('github.com/');
+  if (ghIdx !== -1) s = s.slice(ghIdx + 'github.com/'.length);
+  let parts = s.split('/').filter(Boolean);
+  // if first segment looks like a local path (~, ., Desktop…), skip junk and use last segment
+  if (parts.length > 2 && /^[~.]|^(Desktop|Documents|Users|home)$/i.test(parts[0])) {
+    const last = parts[parts.length - 1];
+    // support owner__repo notation (double-underscore as separator)
+    if (last.includes('__')) {
+      const [owner, ...rest] = last.split('__');
+      return owner + '/' + rest.join('-');
+    }
+    // can't reliably extract owner/repo — return as-is for server-side validation
+    return last;
+  }
+  return parts.length >= 2 ? parts[0] + '/' + parts[1] : s;
+};
 
 // sessionId -> AbortController for the command currently running in that session.
 // Drives the STOP button and the "no switching while busy" lock.

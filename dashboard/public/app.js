@@ -546,11 +546,28 @@ function renderProjectsList() {
   }
 }
 
+function extractGithubSlug(raw) {
+  let s = raw.trim().replace(/\.git$/, '');
+  const idx = s.toLowerCase().indexOf('github.com/');
+  if (idx !== -1) s = s.slice(idx + 'github.com/'.length);
+  const parts = s.split('/').filter(Boolean);
+  if (parts.length > 2 && /^[~.]|^(Desktop|Documents|Users|home)$/i.test(parts[0])) {
+    const last = parts[parts.length - 1];
+    if (last.includes('__')) { const [o, ...r] = last.split('__'); return o + '/' + r.join('-'); }
+    return last;
+  }
+  return parts.length >= 2 ? parts[0] + '/' + parts[1] : s;
+}
+
 async function createProjectFromModal() {
   const name = $('newProjName').value.trim();
   if (!name) { $('newProjName').focus(); return; }
   let repo = $('newProjRepoLocal').value.trim();
-  if (!repo) repo = $('newProjRepoRemote').value.trim();
+  if (!repo) {
+    const raw = $('newProjRepoRemote').value.trim();
+    repo = raw ? extractGithubSlug(raw) : '';
+    if (repo !== raw) $('newProjRepoRemote').value = repo; // show corrected value
+  }
   try {
     const p = await api('/api/projects', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, repo }),
