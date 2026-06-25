@@ -160,6 +160,125 @@ async function runCodeTask(cardId) {
   return { ok: true, pr: pr.number, url: pr.html_url, files: (ct.filesChanged || []).length, isFix };
 }
 
+// ---- manual Tech Lead review (the n8n WF3 pipeline, from the dashboard) ----
+// Reviews one In-Review card's PR: conflict/CI gate → Claude code review →
+// APPROVE = squash-merge to develop + move card to Done; REQUEST_CHANGES (or
+// CI fail/conflict) = close PR + send card back to To Do for a fix pass.
+// Mirrors workflows/workflow-3-tech-lead.json.
+async function runReview(cardId) {
+  const L = config.trello.lists;
+  const detail = await T.getCardDetail(cardId);
+  if (!detail || !detail.name) {
+    reply('⚠️ کارت پیدا نشد.');
+    return { ok: false, error: 'card not found' };
+  }
+  const mm = T.parseMeta(detail.desc);
+  if (!mm.repo) {
+    reply('⚠️ این کارت آدرس repo ندارد.');
+    return { ok: false, error: 'no repo' };
+  }
+  const [o, r] = mm.repo.split('/');
+  const track = T.trackOf(detail.name);
+
+  reply('🏗️ Tech Lead در حال ریویوی «' + detail.name + '»…');
+
+  let prNum = null;
+  try {
+    const list = await gh('GET', '/repos/' + o + '/' + r + '/pulls?state=open&base=develop&per_page=100');
+    const match = (list || []).find((p) => p && p.head && p.head.ref === 'task/' + cardId);
+    if (match) prNum = match.number;
+  } catch (e) {
+    reply('⚠️ خطا در گرفتن لیست PRها: ' + e.message);
+    return { ok: false, error: e.message };
+  }
+  if (!prNum) {
+    reply('⚠️ برای این کارت PR بازی به develop پیدا نشد (شاید قبلاً merge/بسته شده).');
+    return { ok: false, error: 'no open PR' };
+  }
+
+  let pr;
+  try {
+    pr = await gh('GET', '/repos/' + o + '/' + r + '/pulls/' + prNum);
+  } catch (e) {
+    reply('⚠️ خواندن PR #' + prNum + ' ناموفق: ' + e.message);
+    return { ok: false, error: e.message };
+  }
+
+  // conflict with develop → close + send back to fix
+  if (pr.mergeable === false || pr.mergeable_state === 'dirty') {
+    try { await gh('PATCH', '/repos/' + o + '/' + r + '/pulls/' + prNum, { state: 'closed' }); } catch (e) {}
+    await T.addComment(cardId, '🔴 کانفلیکت با develop در PR #' + prNum + '؛ PR بسته شد و تسک برای بازسازی برگشت.');
+    await T.moveCard(cardId, L.todo);
+    reply('⚠️ کانفلیکت در PR #' + prNum + '. بسته شد و کارت به «در صف» برگشت.');
+    return { ok: true, status: 'conflict', pr: prNum };
+  }
+
+  // CI gate — never merge without a green CI
+  let runs = [];
+  try {
+    runs = (await gh('GET', '/repos/' + o + '/' + r + '/commits/' + pr.head.sha + '/check-runs')).check_runs || [];
+  } catch (e) {}
+  if (runs.length && runs.some((x) => x.status !== 'completed')) {
+    reply('⏳ CI هنوز در حال اجراست؛ کمی بعد دوباره ریویو بزن.');
+    return { ok: true, status: 'waitCI', pr: prNum };
+  }
+  const failed = runs.filter((x) => x.conclusion && !['success', 'neutral', 'skipped'].includes(x.conclusion));
+  if (failed.length) {
+    let log = '';
+    for (const x of failed) {
+      log += '### ' + x.name + ' → ' + x.conclusion + '\n';
+      if (x.output && x.output.summary) log += String(x.output.summary).slice(0, 800) + '\n';
+    }
+    log = log.trim().slice(0, 4000) || 'بدون جزئیات';
+    try { await gh('PATCH', '/repos/' + o + '/' + r + '/pulls/' + prNum, { state: 'closed' }); } catch (e) {}
+    await T.addComment(cardId, '🔴 CI رد شد (build/test) در PR #' + prNum + '. لاگ:\n' + log);
+    await T.moveCard(cardId, L.todo);
+    reply('❌ CI رد شد. PR بسته شد و کارت برای فیکس به «در صف» برگشت.');
+    return { ok: true, status: 'ciFail', pr: prNum };
+  }
+
+  // Claude code review
+  let files = [];
+  try { files = await gh('GET', '/repos/' + o + '/' + r + '/pulls/' + prNum + '/files'); } catch (e) {}
+  const diff = (files || []).map((f) => 'FILE: ' + f.filename + '\n' + (f.patch || '')).join('\n\n').slice(0, 12000);
+  const tlRole = (await readRole('tech-lead')) || 'تو Tech Lead هستی.';
+  const rev = jparse(
+    await claude(
+      tlRole +
+        '\n\nاین diff را در برابر تسک و استاندارد استک (' + track +
+        ') بسنج. خروجی فقط JSON با کلیدهای verdict (APPROVE یا REQUEST_CHANGES) و comment (فارسی). فقط JSON. تسک: ' +
+        detail.name + '\n' + detail.desc + '\n\nDIFF:\n' + diff,
+      1800,
+    ),
+  ) || { verdict: 'REQUEST_CHANGES', comment: 'خروجی ریویو خوانده نشد' };
+
+  if (rev.verdict === 'APPROVE') {
+    try { await gh('POST', '/repos/' + o + '/' + r + '/pulls/' + prNum + '/reviews', { event: 'APPROVE', body: rev.comment }); } catch (e) {}
+    let merged = false, mergeErr = '';
+    try {
+      const mr = await gh('PUT', '/repos/' + o + '/' + r + '/pulls/' + prNum + '/merge', { merge_method: 'squash', commit_title: detail.name + ' (#' + prNum + ')' });
+      merged = !!(mr && mr.merged);
+      if (!merged) mergeErr = (mr && mr.message) || 'merge ناموفق';
+    } catch (e) { mergeErr = e.message; }
+    if (merged) {
+      try { await gh('DELETE', '/repos/' + o + '/' + r + '/git/refs/heads/task/' + cardId); } catch (e) {}
+      await T.moveCard(cardId, L.owner);
+      reply('✅ تأیید و merge شد در develop: ' + detail.name + '\n' + (rev.comment || ''));
+      return { ok: true, status: 'merged', pr: prNum };
+    }
+    await T.moveCard(cardId, L.owner);
+    reply('✅ تأیید شد ولی merge خودکار نشد (' + mergeErr + '). دستی merge کن: ' + pr.html_url);
+    return { ok: true, status: 'approved', pr: prNum, url: pr.html_url, mergeErr };
+  }
+
+  try { await gh('POST', '/repos/' + o + '/' + r + '/pulls/' + prNum + '/reviews', { event: 'REQUEST_CHANGES', body: rev.comment }); } catch (e) {}
+  try { await gh('PATCH', '/repos/' + o + '/' + r + '/pulls/' + prNum, { state: 'closed' }); } catch (e) {}
+  await T.addComment(cardId, '🔴 Tech Lead نیاز به اصلاح اعلام کرد: ' + (rev.comment || ''));
+  await T.moveCard(cardId, L.todo);
+  reply('🔧 نیاز به اصلاح: ' + detail.name + '\n' + (rev.comment || ''));
+  return { ok: true, status: 'changes', pr: prNum, comment: rev.comment };
+}
+
 // ---- per-stack CI generators (ported from WF1) ---------------------------
 const mkWf = (track, steps) =>
   [
@@ -589,4 +708,4 @@ async function runCommand(text) {
   return { unknown: true };
 }
 
-module.exports = { runCommand, runCodeTask };
+module.exports = { runCommand, runCodeTask, runReview };

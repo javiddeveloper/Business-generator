@@ -148,7 +148,7 @@ function renderBoard(columns) {
     if (!col.cards.length) cards.appendChild(el('div', 'empty', '—'));
     for (const card of col.cards) {
       const cd = el('div', 'card clickable');
-      cd.addEventListener('click', () => openCardDetail(card.id, card.name));
+      cd.addEventListener('click', () => openCardDetail(card.id, card.name, col.key));
       const title = el('div', 'card-title', card.name.replace(/^\[[^\]]*\]\[[^\]]*\](\[[^\]]*\])?\s*/, ''));
       title.setAttribute('dir', 'auto');
       cd.appendChild(title);
@@ -218,7 +218,7 @@ function openDetailModal(title, meta) {
   detailOverlay.hidden = false;
 }
 
-async function openCardDetail(cardId, cardName) {
+async function openCardDetail(cardId, cardName, colKey) {
   openDetailModal(cardName.replace(/^\[[^\]]*\]\[[^\]]*\](\[[^\]]*\])?\s*/, ''), 'تسک ترلو');
   let data;
   try {
@@ -237,50 +237,10 @@ async function openCardDetail(cardId, cardName) {
     body.appendChild(link);
   }
 
-  // Manual developer run: clone + real agent + PR, straight from the dashboard.
+  // Column-aware action: Developer run (To Do/In Progress) or Tech Lead review
+  // (In Review). Waiting/Done show a status note instead of a button.
   if (data.desc && /repo:\s*\S+/.test(data.desc)) {
-    const runWrap = el('div', 'detail-run');
-    const runBtn = el('button', 'run-task-btn', '▶ اجرای این تسک با agent (کلون + کد + PR)');
-    const runMsg = el('div', 'run-task-msg');
-    runBtn.addEventListener('click', async () => {
-      if (!confirm('agent این تسک را کلون می‌کند، کد می‌نویسد و یک PR به develop می‌سازد. ادامه؟')) return;
-      runBtn.disabled = true;
-      runBtn.textContent = '⏳ در حال اجرا… (ممکن است تا یک دقیقه طول بکشد)';
-      runMsg.textContent = '';
-      runMsg.className = 'run-task-msg';
-      let res;
-      try {
-        res = await api('/api/code-task', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ cardId }),
-        });
-      } catch (e) {
-        res = { ok: false, error: e.message };
-      }
-      const r = (res && res.result) || {};
-      if (res && res.ok && r.pr) {
-        runMsg.className = 'run-task-msg ok';
-        runMsg.innerHTML = '✅ PR #' + faNum(r.pr) + ' ساخته شد (' + faNum(r.files || 0) + ' فایل). ';
-        const a = el('a', 'detail-link', '🔗 مشاهده PR');
-        a.href = r.url; a.target = '_blank';
-        runMsg.appendChild(a);
-        runBtn.textContent = '✅ انجام شد';
-        lastActivitySig = '';
-        refreshActivity(); refreshState();
-        if (activeMainTab === 'prs') refreshPRs();
-      } else {
-        runMsg.className = 'run-task-msg err';
-        runMsg.textContent = '⚠️ ' + ((r && r.error) || (res && res.error) || 'اجرا ناموفق بود');
-        runBtn.disabled = false;
-        runBtn.textContent = '▶ تلاش دوباره';
-        lastActivitySig = '';
-        refreshActivity();
-      }
-    });
-    runWrap.appendChild(runBtn);
-    runWrap.appendChild(runMsg);
-    body.appendChild(runWrap);
+    renderCardAction(body, cardId, colKey);
   }
 
   if (data.labels && data.labels.length) {
@@ -316,6 +276,86 @@ async function openCardDetail(cardId, cardName) {
   if (!data.desc && (!data.comments || !data.comments.length)) {
     body.appendChild(el('div', 'empty', 'محتوایی ثبت نشده.'));
   }
+}
+
+function renderCardAction(body, cardId, colKey) {
+  const wrap = el('div', 'detail-run');
+
+  if (colKey === 'owner') {
+    wrap.appendChild(el('div', 'run-task-msg ok', '✅ این تسک تأیید و merge شده است.'));
+    body.appendChild(wrap);
+    return;
+  }
+  if (colKey === 'wait') {
+    wrap.appendChild(el('div', 'run-task-msg', '⏳ منتظر آماده‌شدن API بک‌اند است. ابتدا تسک‌های backend را اجرا کن.'));
+    body.appendChild(wrap);
+    return;
+  }
+
+  const isReview = colKey === 'review';
+  const cfg = isReview
+    ? { endpoint: '/api/review', label: '🏗️ ریویوی Tech Lead (merge یا برگشت برای اصلاح)',
+        confirm: 'Tech Lead این PR را بررسی می‌کند: اگر CI سبز و کد سالم بود merge، وگرنه برای اصلاح به «در صف» برمی‌گردد. ادامه؟' }
+    : { endpoint: '/api/code-task', label: '▶ اجرای این تسک با agent (کلون + کد + PR)',
+        confirm: 'agent این تسک را کلون می‌کند، کد می‌نویسد و یک PR به develop می‌سازد. ادامه؟' };
+
+  const btn = el('button', 'run-task-btn', cfg.label);
+  const msg = el('div', 'run-task-msg');
+  btn.addEventListener('click', async () => {
+    if (!confirm(cfg.confirm)) return;
+    btn.disabled = true;
+    btn.textContent = '⏳ در حال اجرا…';
+    msg.textContent = '';
+    msg.className = 'run-task-msg';
+    let res;
+    try {
+      res = await api(cfg.endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cardId }),
+      });
+    } catch (e) {
+      res = { ok: false, error: e.message };
+    }
+    const r = (res && res.result) || {};
+    if (res && res.ok) {
+      msg.className = 'run-task-msg ok';
+      let done = true;
+      if (cfg.endpoint === '/api/code-task') {
+        msg.innerHTML = '✅ PR #' + faNum(r.pr) + ' ساخته شد (' + faNum(r.files || 0) + ' فایل). ';
+        const a = el('a', 'detail-link', '🔗 مشاهده PR');
+        a.href = r.url; a.target = '_blank';
+        msg.appendChild(a);
+      } else {
+        const REV = {
+          merged: '✅ تأیید و merge شد در develop. کارت به «تمام‌شده» رفت.',
+          approved: '✅ تأیید شد ولی merge خودکار نشد — دستی merge کن.',
+          changes: '🔧 نیاز به اصلاح. کارت به «در صف» برگشت (دفعهٔ بعد در حالت fix).',
+          ciFail: '❌ CI رد شد. PR بسته و کارت برای فیکس به «در صف» برگشت.',
+          conflict: '⚠️ کانفلیکت با develop. PR بسته و کارت برگشت.',
+          waitCI: '⏳ CI هنوز در حال اجراست؛ کمی بعد دوباره بزن.',
+        };
+        msg.textContent = REV[r.status] || '✅ انجام شد.';
+        if (r.status === 'changes' || r.status === 'ciFail' || r.status === 'conflict') msg.className = 'run-task-msg err';
+        if (r.status === 'waitCI') { msg.className = 'run-task-msg'; done = false; }
+      }
+      if (done) btn.textContent = '✅ انجام شد';
+      else { btn.disabled = false; btn.textContent = cfg.label; }
+      lastActivitySig = '';
+      refreshActivity(); refreshState();
+      if (activeMainTab === 'prs') refreshPRs();
+    } else {
+      msg.className = 'run-task-msg err';
+      msg.textContent = '⚠️ ' + ((r && r.error) || (res && res.error) || 'اجرا ناموفق بود');
+      btn.disabled = false;
+      btn.textContent = '🔁 تلاش دوباره';
+      lastActivitySig = '';
+      refreshActivity();
+    }
+  });
+  wrap.appendChild(btn);
+  wrap.appendChild(msg);
+  body.appendChild(wrap);
 }
 
 async function openPRDetail(repo, number, title) {

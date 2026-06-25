@@ -263,6 +263,19 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, { ok: false, error: e.message });
       }
     }
+    if (p === '/api/review' && req.method === 'POST') {
+      const body = JSON.parse((await readBody(req)) || '{}');
+      const cardId = (body.cardId || '').trim();
+      if (!cardId) return sendJson(res, 400, { error: 'missing cardId' });
+      cache.delete('state');
+      cache.delete('activity');
+      try {
+        const result = await owner.runReview(cardId);
+        return sendJson(res, 200, { ok: !!(result && result.ok), result });
+      } catch (e) {
+        return sendJson(res, 200, { ok: false, error: e.message });
+      }
+    }
     if (p.startsWith('/api/')) return sendJson(res, 404, { error: 'unknown endpoint' });
     return serveStatic(res, p);
   } catch (e) {
