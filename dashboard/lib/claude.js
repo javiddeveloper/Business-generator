@@ -5,16 +5,24 @@ const activity = require('./activity');
 async function claude(prompt, maxTokens = 3000, signal) {
   // fall back to the abort signal carried on the active session context (STOP button)
   signal = signal || ((activity.ctx() || {}).signal);
-  const res = await fetch(config.bridge + '/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    signal,
-    body: JSON.stringify({
-      model: 'claude-opus-4-8',
-      max_tokens: maxTokens,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
+  let res;
+  try {
+    res = await fetch(config.bridge + '/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal,
+      body: JSON.stringify({
+        model: 'claude-opus-4-8',
+        max_tokens: maxTokens,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+  } catch (e) {
+    // STOP button / abort → bubble up so callers can detect it
+    if (e && (e.name === 'AbortError' || /aborted/i.test(e.message || ''))) throw e;
+    // Network-level failure (bridge down, connection dropped) surfaces as "fetch failed"
+    throw new Error('اتصال به پل مدل برقرار نشد (claude-bridge.js را اجرا/بررسی کن).');
+  }
   const j = await res.json().catch(() => ({}));
   if (j && j.error) throw new Error('bridge: ' + (j.error.message || 'claude error'));
   return (j.content && j.content[0] && j.content[0].text) || '';

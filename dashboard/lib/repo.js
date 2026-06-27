@@ -120,6 +120,15 @@ async function status(repo) {
   // Detect the case where the folder was deleted manually by the user
   // (dir doesn't exist but we still want to inform the caller)
   const out = { ok: true, repo: slug, dir, cloned, folderMissing: !dirExists && !cloned, isLocalPath };
+
+  // For local paths, detect whether git and a remote are present
+  if (isLocalPath && dirExists) {
+    out.hasGit = cloned;
+    const remoteRaw = cloned ? readGitRemote(dir) : '';
+    out.hasRemote = !!remoteRaw;
+    out.needsGitConnect = !cloned || !remoteRaw;
+  }
+
   try {
     if (cloned) {
       const lb = await localBranches(dir);
@@ -144,6 +153,80 @@ async function status(repo) {
     out.branches = out.branches || [];
   }
   return out;
+}
+
+// Make sure a project is backed by a git checkout so the agent flow (which works
+// inside a git working tree) can run. Remote repos go through clone() elsewhere;
+// here we only auto-init a *local* folder that exists but isn't versioned yet —
+// `git init` + an initial commit — then return fresh status. Best-effort: on a
+// remote ref or a missing folder it just returns the plain status.
+async function ensureGit(repo) {
+  const slug = normRepo(repo);
+  const isLocalPath = /^([a-zA-Z]:[/\\]|\\\\|\/|~)/.test(slug);
+  const dir = repoDir(slug);
+  if (isLocalPath && fs.existsSync(dir) && !fs.existsSync(path.join(dir, '.git'))) {
+    const init = await git(['-C', dir, 'init']);
+    if (init.code === 0) {
+      await git(['-C', dir, 'config', 'user.email', 'bot@business-generator.local']);
+      await git(['-C', dir, 'config', 'user.name', 'Startup Bot']);
+      await git(['-C', dir, 'add', '-A']);
+      const staged = await git(['-C', dir, 'diff', '--cached', '--name-only']);
+      if (staged.out.trim()) await git(['-C', dir, 'commit', '-m', 'initial commit']);
+    }
+  }
+  return status(slug);
+}
+
+// Checkout a branch in a local clone. Returns fresh status.
+async function checkout(repo, branch) {
+  const slug = normRepo(repo);
+  const dir = repoDir(slug);
+  if (!fs.existsSync(path.join(dir, '.git'))) throw new Error('مخزن git وجود ندارد');
+  // fetch to refresh remote refs (best-effort)
+  await git(['-C', dir, 'fetch', '--prune', 'origin']);
+  // try local branch first, then track remote
+  const localCo = await git(['-C', dir, 'checkout', branch]);
+  if (localCo.code !== 0) {
+    const remoteCo = await git(['-C', dir, 'checkout', '-B', branch, 'origin/' + branch]);
+    if (remoteCo.code !== 0) throw new Error('checkout ناموفق: ' + (remoteCo.err || remoteCo.out).slice(0, 200));
+  }
+  return status(slug);
+}
+
+// Init git + add remote + push for a local folder that lacks a GitHub remote.
+async function connectGit(localPath, remoteUrl) {
+  const token = config.github.token;
+  const slug = parseRemoteSlug(remoteUrl) || normRepo(remoteUrl);
+  if (!slug || slug.indexOf('/') < 0) throw new Error('آدرس گیت‌هاب معتبر نیست (owner/repo)');
+  const authUrl = buildAuthUrl(slug, token);
+  const dir = localPath;
+  if (!fs.existsSync(dir)) throw new Error('مسیر لوکال وجود ندارد');
+
+  const hasGit = fs.existsSync(path.join(dir, '.git'));
+  if (!hasGit) {
+    const init = await git(['-C', dir, 'init']);
+    if (init.code !== 0) throw new Error('git init ناموفق');
+    await git(['-C', dir, 'config', 'user.email', 'bot@business-generator.local']);
+    await git(['-C', dir, 'config', 'user.name', 'Startup Bot']);
+    await git(['-C', dir, 'add', '-A']);
+    const staged = await git(['-C', dir, 'diff', '--cached', '--name-only']);
+    if (staged.out.trim()) {
+      const com = await git(['-C', dir, 'commit', '-m', 'initial commit']);
+      if (com.code !== 0) throw new Error('commit اولیه ناموفق: ' + redact(com.err, token).slice(0, 200));
+    }
+  }
+
+  // set or update remote origin
+  const existingRemote = readGitRemote(dir);
+  if (existingRemote) {
+    await git(['-C', dir, 'remote', 'set-url', 'origin', authUrl]);
+  } else {
+    const addR = await git(['-C', dir, 'remote', 'add', 'origin', authUrl]);
+    if (addR.code !== 0) throw new Error('remote add ناموفق: ' + redact(addR.err, token).slice(0, 200));
+  }
+
+  const push = await git(['-C', dir, 'push', '-u', 'origin', 'HEAD']);
+  if (push.code !== 0) throw new Error('push ناموفق: ' + redact(push.err || push.out, token).slice(0, 300));
 }
 
 // Remove the local clone directory for a repo (used when a project is deleted).
@@ -195,4 +278,4 @@ async function clone(repo) {
   return status(slug);
 }
 
-module.exports = { status, clone, repoDir, workspaceRoot, deleteClone };
+module.exports = { status, clone, checkout, connectGit, repoDir, workspaceRoot, deleteClone, ensureGit };

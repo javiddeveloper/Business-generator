@@ -43,6 +43,8 @@ const projectDir = (pid) => path.join(DATA, 'projects', pid);
 const sessionsFile = (pid) => path.join(projectDir(pid), 'sessions.json');
 const messagesFile = (pid, sid) => path.join(projectDir(pid), 'messages', sid + '.json');
 const boardFile = (pid) => path.join(projectDir(pid), 'board.json');
+const tasksFile = (pid) => path.join(projectDir(pid), 'tasks.json');
+const reportFile = (pid) => path.join(projectDir(pid), 'report.json');
 
 // ---- projects ------------------------------------------------------------
 function listProjects() {
@@ -67,6 +69,8 @@ function updateProject(pid, patch) {
   if (patch.name != null) p.name = String(patch.name).trim() || p.name;
   if (patch.repo != null) p.repo = normRepo(patch.repo);
   if (patch.archived != null) p.archived = !!patch.archived;
+  if (patch.branch != null) p.branch = String(patch.branch).trim() || p.branch;
+  if (patch.autoMode != null) p.autoMode = !!patch.autoMode;
   p.updatedAt = now();
   writeJson(PROJECTS_FILE, all);
   return p;
@@ -127,6 +131,53 @@ function writeBoard(pid, snapshot) {
   writeJson(boardFile(pid), { ...snapshot, ts: now() });
 }
 
+// ---- tasks (canonical, per project) --------------------------------------
+// The project's own task list is the source of truth on disk. Trello is kept
+// in sync from this file (cards are recreated on a project switch if missing),
+// so each project always shows its own tasks even on a fresh/shared board.
+// Shape: [{ id, cardId, title, desc, track, complexity, column, createdAt }]
+function readTasks(pid) {
+  return readJson(tasksFile(pid), []);
+}
+function writeTasks(pid, tasks) {
+  writeJson(tasksFile(pid), Array.isArray(tasks) ? tasks : []);
+}
+function addTask(pid, task) {
+  const all = readTasks(pid);
+  const full = {
+    id: task.id || id(),
+    cardId: task.cardId || null,
+    title: String(task.title || '').trim(),
+    desc: task.desc || '',
+    track: task.track || 'backend',
+    complexity: task.complexity || 'medium',
+    column: task.column || 'todo',
+    createdAt: now(),
+  };
+  all.push(full);
+  writeTasks(pid, all);
+  return full;
+}
+function updateTask(pid, taskId, patch) {
+  const all = readTasks(pid);
+  const tk = all.find((x) => x.id === taskId);
+  if (!tk) return null;
+  Object.assign(tk, patch);
+  writeTasks(pid, all);
+  return tk;
+}
+
+// ---- progress report (per project) --------------------------------------
+// Written by the Product Owner when auto-run is stopped ("how far did we get,
+// what's left"); read back by the Developer/Tech-Lead on the next run so work
+// continues with full context. Shape: { text, ts }.
+function readReport(pid) {
+  return readJson(reportFile(pid), null);
+}
+function writeReport(pid, report) {
+  writeJson(reportFile(pid), { text: String((report && report.text) || ''), ts: now() });
+}
+
 // ---- bootstrap -----------------------------------------------------------
 // Guarantee at least one project exists so the UI has something to open.
 function bootstrap(defaultRepo) {
@@ -144,5 +195,7 @@ module.exports = {
   listSessions, createSession, updateSession, deleteSession,
   readMessages, appendMessage,
   readBoard, writeBoard,
+  readTasks, writeTasks, addTask, updateTask,
+  readReport, writeReport,
   bootstrap,
 };

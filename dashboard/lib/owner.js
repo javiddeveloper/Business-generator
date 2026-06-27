@@ -7,6 +7,9 @@ const { gh } = require('./github');
 const { claude, jparse } = require('./claude');
 const bale = require('./bale');
 const activity = require('./activity');
+const store = require('./store');
+const repoLib = require('./repo');
+const memory = require('./memory');
 
 const enc = (s) => Buffer.from(s || '', 'utf8').toString('base64');
 const normRepo = (u) =>
@@ -94,6 +97,7 @@ async function runCodeTask(cardId) {
     '\nنام پروژه: ' + (mm.project || '') +
     (mm.ref ? '\nمرجع: ' + mm.ref : '') +
     '\nهمه‌ی کد باید زیر پوشه‌ی ' + dir + ' باشد.' +
+    reportContext() +
     (apiDocs ? '\n\nمستندات API:\n' + apiDocs : '');
   const workRules =
     '\n\nتو داخل یک checkout گیت از پروژه کار می‌کنی و به ابزارهای Read/Grep/Edit/Write/Bash دسترسی کامل داری. قبل از نوشتن، فایل‌های همسایه را بخوان تا از قراردادها پیروی کنی. همه‌ی کد و تست‌ها باید زیر ' + dir + ' باشند؛ به track‌های دیگر دست نزن. طبق استک حداقل ۳ تست واقعی بنویس.\n\n⚙️ قبل از پایان، تست‌ها را با Bash لوکال اجرا کن و فقط وقتی سبز شدند کار را تمام کن. وقتی تمام شد متوقف شو.';
@@ -245,6 +249,7 @@ async function runReview(cardId) {
   const rev = jparse(
     await claude(
       tlRole +
+        reportContext() +
         '\n\nاین diff را در برابر تسک و استاندارد استک (' + track +
         ') بسنج. خروجی فقط JSON با کلیدهای verdict (APPROVE یا REQUEST_CHANGES) و comment (فارسی). فقط JSON. تسک: ' +
         detail.name + '\n' + detail.desc + '\n\nDIFF:\n' + diff,
@@ -623,20 +628,8 @@ async function handleFixFeature(kind, desc) {
   return { added: name };
 }
 
-async function handleExit() {
-  const L = config.trello.lists;
-  let cleared = 0;
-  for (const k of Object.keys(L)) {
-    const cs = await T.listCards(L[k]);
-    cleared += cs.length;
-    for (const c of cs) await T.deleteCard(c.id);
-  }
-  reply('🛑 خروج اضطراری: ' + cleared + ' تسک متوقف و از برد پاک شد.');
-  return { exit: cleared };
-}
-
-// Graceful project end: clear the board so a new idea can start.
-// (Distinct from /exit which is the emergency stop — same effect, friendlier intent.)
+// Graceful project end: clear the board (and the canonical tasks file) so a
+// fresh set of tasks can be started.
 async function handleFinish() {
   const L = config.trello.lists;
   let cleared = 0;
@@ -645,7 +638,9 @@ async function handleFinish() {
     cleared += cs.length;
     for (const c of cs) await T.deleteCard(c.id);
   }
-  reply('🏁 پروژه تمام شد و برد پاک شد (' + cleared + ' تسک). حالا می‌توانی ایده‌ی جدید بفرستی.');
+  const pid = (activity.ctx() || {}).projectId;
+  if (pid) store.writeTasks(pid, []); // keep the canonical file in sync
+  reply('🏁 پروژه تمام شد و برد پاک شد (' + cleared + ' تسک). حالا می‌توانی تسک‌های جدید بسازی.');
   return { finished: cleared };
 }
 
@@ -684,38 +679,208 @@ async function handleReport() {
   return { report: total };
 }
 
+// ---- chat-first Product Owner -------------------------------------------
+// The user only chats. The "agent" relays the message to the Product Owner,
+// who — knowing the project's repo already — either answers the question or
+// breaks the request into atomic tasks (Trello cards + the canonical tasks
+// file). The agent does nothing else: it never writes code here; execution is
+// governed by Play/Stop (auto-runner) or the manual run buttons.
+// Ask the model with the project's real files in reach. When the active project
+// has a local/cloned checkout, the prompt is run as a read-only agent *inside*
+// that directory (so Read/Grep ground the answer and the model can break work
+// into accurate tasks); otherwise it falls back to a plain bridge chat. This is
+// what lets the Product Owner answer "what is this project / where is it" instead
+// of only seeing the dashboard's own folder.
+async function askProjectAware(prompt, maxTokens) {
+  const ctx = activity.ctx() || {};
+  let st = null;
+  try { st = await repoLib.ensureGit(ctx.repo || ''); } catch (e) {}
+  if (st && st.cloned && st.dir) {
+    try {
+      const r = await fetch(config.bridge + '/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: ctx.signal,
+        body: JSON.stringify({ dir: st.dir, task: prompt, readonly: true, push: false }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (j && j.ok && j.summary) return j.summary;
+    } catch (e) {
+      if (e && (e.name === 'AbortError' || /aborted/i.test(e.message || ''))) throw e;
+      // any other agent failure → fall back to plain chat below
+    }
+  }
+  return claude(prompt, maxTokens);
+}
+
+async function runOwnerChat(text) {
+  const ctx = activity.ctx() || {};
+  const pid = ctx.projectId;
+  const repo = normRepo(ctx.repo || '');
+  const project = pid ? store.getProject(pid) : null;
+  const projectName = (project && project.name) || '';
+  const L = config.trello.lists;
+
+  activity.push('user', text);
+
+  const existing = (pid ? store.readTasks(pid) : []).map((t) => '• ' + t.title).join('\n');
+  const poRole = (await readRole('product-owner')) || 'تو Product Owner یک تیم نرم‌افزاری هستی.';
+  const prompt =
+    poRole +
+    '\n\nکاربر در حال گفتگو درباره‌ی پروژه «' + projectName + '»' + (repo ? ' (repo: ' + repo + ')' : '') + ' است. ' +
+    'آدرس ریپو از قبل مشخص است؛ هرگز ریپو را نپرس.\n' +
+    (existing ? 'تسک‌های فعلی این پروژه:\n' + existing + '\n\n' : '') +
+    'پیام کاربر:\n' + text + '\n\n' +
+    'تصمیم بگیر: اگر کاربر درخواست قابلیت/رفع‌باگ/کار جدید دارد، آن را به تسک‌های اتمیک بشکن (هر تسک کوچک و مستقل). ' +
+    'اگر فقط سؤال یا مشورت است، tasks را خالی بگذار و در reply جواب بده.\n' +
+    'فقط و فقط JSON برگردان با این شکل (بدون متن اضافه):\n' +
+    '{"reply":"پیام دوستانه و فارسی به کاربر","tasks":[{"title":"...","desc":"...","track":"backend|frontend|mobile","complexity":"boilerplate|medium|complex"}]}';
+
+  let raw = '';
+  try {
+    raw = await askProjectAware(prompt, 3000);
+  } catch (e) {
+    const msg = '⚠️ ' + (e.message || 'پاسخ مدل گرفته نشد');
+    activity.push('agent', msg);
+    return { reply: msg, tasksCreated: 0 };
+  }
+  const parsed = jparse(raw) || { reply: String(raw || '').trim(), tasks: [] };
+  const tasks = Array.isArray(parsed.tasks) ? parsed.tasks : [];
+  const hasBackend = tasks.some((t) => (t.track || 'backend').toLowerCase() === 'backend');
+
+  const created = [];
+  for (const t of tasks) {
+    if (!t || !t.title) continue;
+    const tr = (t.track || 'backend').toLowerCase();
+    const column = tr === 'backend' ? 'todo' : hasBackend ? 'wait' : 'todo';
+    const complexity = t.complexity || 'medium';
+    const name = '[' + tr + '][' + complexity + '] ' + t.title;
+    const desc = (t.desc || '') + '\n\n---\nrepo: ' + repo + '\nproject: ' + projectName;
+    let card = null;
+    try { card = await T.createCard(L[column], name, desc); } catch (e) {}
+    if (pid) store.addTask(pid, { cardId: card && card.id, title: t.title, desc: t.desc || '', track: tr, complexity, column });
+    created.push('• ' + name);
+  }
+
+  let reply = (parsed.reply || '').trim();
+  if (!reply && !created.length) reply = String(raw || '').trim() || 'متوجه نشدم؛ دوباره توضیح بده.';
+  if (created.length) reply += (reply ? '\n\n' : '') + '✅ ' + created.length + ' تسک ساخته و به برد اضافه شد:\n' + created.join('\n');
+  activity.push('agent', reply);
+  return { reply, tasksCreated: created.length };
+}
+
+// ---- sync the canonical tasks file → Trello (on project switch) ----------
+// File is the source of truth: any task whose card is missing from the board
+// is (re)created so the active project always shows its own tasks. Existing
+// cards are left untouched; nothing is deleted.
+async function syncTasksToTrello(pid, repo, projectName) {
+  const tasks = pid ? store.readTasks(pid) : [];
+  if (!tasks.length) return { synced: 0 };
+  const L = config.trello.lists;
+  const liveIds = new Set();
+  for (const k of Object.keys(L)) {
+    for (const c of await T.listCards(L[k])) liveIds.add(c.id);
+  }
+  let created = 0;
+  for (const task of tasks) {
+    if (task.cardId && liveIds.has(task.cardId)) continue;
+    const list = L[task.column] || L.todo;
+    const name = '[' + (task.track || 'backend') + '][' + (task.complexity || 'medium') + '] ' + task.title;
+    const desc = (task.desc || '') + '\n\n---\nrepo: ' + normRepo(repo) + '\nproject: ' + (projectName || '');
+    try {
+      const card = await T.createCard(list, name, desc);
+      task.cardId = card && card.id;
+      created++;
+    } catch (e) {}
+  }
+  if (created) store.writeTasks(pid, tasks);
+  return { synced: created };
+}
+
+// ---- progress report (Product Owner) ------------------------------------
+// Generated when auto-run is stopped: "how far did we get, what's left".
+// Stored per project so the Developer/Tech-Lead read it on the next run.
+async function generateProgressReport() {
+  const L = config.trello.lists;
+  const pid = (activity.ctx() || {}).projectId;
+  const repo = activeRepo();
+  const SLABEL = { todo: 'در صف', prog: 'در حال انجام', wait: 'منتظر API', review: 'در حال ریویو', owner: 'تمام‌شده' };
+  const counts = {};
+  const blocks = [];
+  for (const col of COLUMNS) {
+    const cs = (await T.listCards(L[col.key])).filter((c) => cardMatches(c, repo));
+    counts[col.key] = cs.length;
+    for (const c of cs) {
+      const acts = await T.cardComments(c.id, 10);
+      const comments = (acts || []).map((a) => a && a.data && a.data.text).filter(Boolean);
+      const bugs = comments.filter((t) => t.indexOf('🔴') >= 0).length;
+      const dsc = String(c.desc || '').split('\n---')[0].trim().slice(0, 200);
+      blocks.push('### ' + c.name + '\nوضعیت: ' + (SLABEL[col.key] || col.key) + ' | باگ: ' + bugs + '\n' + (dsc || ''));
+    }
+  }
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  let text;
+  if (!total) {
+    text = '📋 گزارش وضعیت: هیچ تسکی روی برد این پروژه نیست.';
+  } else {
+    const poRole = (await readRole('product-owner')) || 'تو Product Owner هستی.';
+    let body = '';
+    try {
+      body = await claude(
+        poRole +
+          '\n\nیک گزارش پیشرفت کوتاه و کاربردی به فارسی بنویس: «تا کجا پیش رفتیم» و «چقدر مانده». ' +
+          'برای هر بخش وضعیت فعلی و قدم بعدیِ پیشنهادی را بگو. لحن مدیریتی و مختصر.\n\n' +
+          'شمار ستون‌ها: ' + JSON.stringify(counts) + '\n\nتسک‌ها:\n' + blocks.join('\n\n'),
+        2500,
+      );
+    } catch (e) {}
+    const done = counts.owner || 0;
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    text = '📋 گزارش وضعیت پروژه (پیشرفت تقریبی ' + pct + '٪ — ' + done + '/' + total + ' تسک تمام‌شده):\n\n' + (body || blocks.join('\n\n'));
+  }
+  if (pid) store.writeReport(pid, { text });
+  // Mirror the stop report into the chained memory file in the checkout, so the
+  // next run — regardless of which bridge is active — reads the same context.
+  try {
+    const st = await repoLib.status(activeRepo());
+    if (st && st.cloned && st.dir) memory.sync(st.dir, text);
+  } catch (e) {}
+  activity.push('agent', text);
+  return { report: text, total };
+}
+
+// The latest stored report, formatted to prepend to a developer/tech-lead brief.
+function reportContext() {
+  const pid = (activity.ctx() || {}).projectId;
+  const rep = pid ? store.readReport(pid) : null;
+  if (!rep || !rep.text) return '';
+  return '\n\n📋 گزارش وضعیت قبلی پروژه (برای ادامه‌ی منسجم کار، اول این را بخوان و در نظر بگیر):\n' + rep.text + '\n';
+}
+
 // ---- composer entry point: parse a Bale-style command and dispatch --------
 async function runCommand(text) {
   const t = String(text || '').trim();
   const low = t.toLowerCase();
+
+  // Anything that isn't a known slash command is free chat → the Product Owner
+  // (runOwnerChat logs the user+agent turns itself, so do it before our push).
+  const isSlash = low === 'finish' || /^\/(finish|done|report|models?|model|help|start)\b/.test(low);
+  if (!isSlash) return runOwnerChat(t);
+
   activity.push('user', t);
 
-  if (low === '/exit' || low === '/stop') return handleExit();
+  // Execution lifecycle (start/stop everything) is now governed by Play/Stop,
+  // so the emergency /exit command has been removed. /finish stays as the
+  // graceful "clear the board" action.
   if (low === '/finish' || low === 'finish' || low === '/done') return handleFinish();
   if (low === '/report') return handleReport();
   if (low === '/models') return handleModels();
   if (low.startsWith('/model ') || low.startsWith('/model\n')) return handleModel(t.slice(6).trim());
   if (low === '/help' || low === '/start') {
-    reply('🤖 دستورها: idea (name/repo/idea) | fix: ... | feature: ... | /report | /finish | /exit | /models | /model <شماره>');
+    reply('🤖 دستورها: /report | /finish | /models | /model <شماره>\nبرای هر چیز دیگری فقط چت کن — تسک‌ها را Product Owner می‌سازد.');
     return { help: true };
   }
-  if (low.startsWith('fix:')) return handleFixFeature('fix', t.slice(4).trim());
-  if (low.startsWith('feature:')) return handleFixFeature('feature', t.slice(8).trim());
-  if (/name:|repo:|idea:/i.test(t)) {
-    const g = (re) => {
-      const m = t.match(re);
-      return m ? m[1].trim() : '';
-    };
-    return handleIdea({
-      name: g(/name:\s*(.+)/i),
-      repo: g(/repo:\s*(\S+)/i),
-      link: g(/link:\s*(\S+)/i),
-      clone: g(/clone:\s*(\S+)/i),
-      idea: g(/idea:\s*([\s\S]+)/i),
-    });
-  }
-  reply('🤷 دستور شناخته نشد. برای راهنما /help بزن.');
   return { unknown: true };
 }
 
-module.exports = { runCommand, runCodeTask, runReview };
+module.exports = { runCommand, runCodeTask, runReview, runOwnerChat, syncTasksToTrello, generateProgressReport };

@@ -24,6 +24,12 @@ const FIELDS = [
   // GapGPT (optional model provider — only needed if you switch to the GapGPT engine)
   { key: 'GAPGPT_API_KEY', label: 'کلید API گپ‌جی‌پی‌تی', group: 'GapGPT', required: false, secret: true, hint: 'فقط برای موتور GapGPT' },
   { key: 'GAPGPT_BASE_URL', label: 'آدرس پایه (اختیاری)', group: 'GapGPT', required: false, hint: 'پیش‌فرض: https://api.gapgpt.app/v1' },
+  // Gemini (optional model provider — OpenAI-compatible key from Google AI Studio)
+  { key: 'GEMINI_API_KEY', label: 'کلید API جمینای', group: 'Gemini', required: false, secret: true, hint: 'از aistudio.google.com بگیر' },
+  { key: 'GEMINI_MODEL', label: 'مدل (اختیاری)', group: 'Gemini', required: false, hint: 'پیش‌فرض: gemini-2.5-pro' },
+  // Ollama (optional local fallback engine for emergencies — usually needs no key)
+  { key: 'OLLAMA_BASE_URL', label: 'آدرس پایه اولاما (اختیاری)', group: 'Ollama', required: false, hint: 'پیش‌فرض: http://localhost:11434/v1' },
+  { key: 'OLLAMA_MODEL', label: 'مدل اولاما (اختیاری)', group: 'Ollama', required: false, hint: 'پیش‌فرض: llama3.1' },
   // Workspace (where the bridge clones repos for the real-agent developer flow)
   { key: 'WORKSPACE_DIR', label: 'مسیر کلون پروژه‌ها', group: 'Workspace', required: false, hint: 'پیش‌فرض: ~/.business-generator/workspaces' },
 ];

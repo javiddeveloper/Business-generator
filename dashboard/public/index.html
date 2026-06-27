@@ -10,26 +10,26 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
   </head>
   <body>
     <header class="topbar">
       <div class="brand">
-        <span class="logo">
+        <span class="logo" title="Command Center">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
         </span>
-        <div>
-          <div class="brand-title" data-i18n="brandTitle">Command Center</div>
-          <div class="brand-sub" data-i18n="brandSub">Autonomous Startup · n8n + Claude</div>
-        </div>
       </div>
 
       <div class="project-chip" id="projectChip">
-        <span class="proj-ic">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z"/></svg>
-        </span>
-        <select id="projectSelect" data-i18n-title="selectProject" title="Select Project"></select>
         <button id="newProjectBtn" class="mini-btn icon-btn" data-i18n-title="newProject" title="New Project">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+        <button id="projectSelect" class="chip-pick" data-i18n-title="selectProject" title="Select Project">
+          <span class="proj-ic">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z"/></svg>
+          </span>
+          <span class="chip-name" id="projectName">—</span>
+          <svg class="chip-caret" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <a id="projectRepoLink" class="proj-repo" target="_blank" hidden></a>
       </div>
@@ -40,12 +40,13 @@
         <div class="stat fix"><span class="stat-num" id="statFixes">۰</span><span class="stat-lbl" data-i18n="fixes">فیکس</span></div>
       </div>
 
-      <div class="model-pick" data-i18n-title="activeModel" title="Active Model">
-        <span class="model-ic">
+      <button class="model-pick chip-pick" id="modelPick" data-i18n-title="activeModel" title="Active Model">
+        <span class="model-ic" id="modelPickIcon">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a5 5 0 0 1 5 5v1a5 5 0 0 1-5 5a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5z"/><path d="M9 17v1a3 3 0 0 0 6 0v-1"/><path d="M6.3 16.8A7 7 0 0 1 5 12"/><path d="M17.7 16.8A7 7 0 0 0 19 12"/></svg>
         </span>
-        <select id="modelSelect"></select>
-      </div>
+        <span class="chip-name" id="modelPickName">—</span>
+        <svg class="chip-caret" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
 
       <button class="health" id="health" data-i18n-title="systemStatus" title="وضعیت سیستم">
         <span class="dot" id="bridgeDot"></span>
@@ -71,10 +72,11 @@
         <div class="panel chat-panel">
           <div class="panel-head">
             <h3 data-i18n="activity">Activity</h3>
-            <span class="live"><span class="live-dot"></span> <span data-i18n="live">Live</span></span>
-          </div>
-          <div class="session-bar">
-            <select id="sessionSelect" data-i18n-title="selectSession" title="Chat Session"></select>
+            <span class="live"><span class="live-dot"></span></span>
+            <button id="sessionSelect" class="chip-pick session-pick" data-i18n-title="selectSession" title="Chat Session">
+              <span class="chip-name" id="sessionName">—</span>
+              <svg class="chip-caret" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
             <button id="newSessionBtn" class="mini-btn icon-btn" data-i18n-title="newChat" title="New Chat">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               <span data-i18n="newChat">Chat</span>
@@ -85,30 +87,54 @@
           </div>
 
           <div class="composer">
-            <div class="quick" id="quick">
-              <button data-tpl="idea">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                <span data-i18n="newIdea">New Idea</span>
+            <!-- mode switcher: Product Owner (makes tasks) / Chat (Q&A) / Agent (codes) -->
+            <div class="mode-switch" id="modeSwitch">
+              <button class="mode-btn active" data-mode="po">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                <span data-i18n="modePo">Product Owner</span>
               </button>
-              <button data-tpl="fix:">fix:</button>
-              <button data-tpl="feature:">feature:</button>
-              <button data-tpl="/report">/report</button>
-              <button data-tpl="/finish">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                /finish
+              <button class="mode-btn" data-mode="chat">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <span data-i18n="modeChat">Chat</span>
               </button>
-              <button data-tpl="/exit" class="danger">/exit</button>
+              <button class="mode-btn" data-mode="agent">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>
+                <span data-i18n="modeAgent">Agent</span>
+              </button>
             </div>
+            <!-- contextual help line under the switcher -->
+            <div class="mode-help" id="modeHelp"></div>
+
             <div class="composer-box" id="composerBox">
+              <div class="img-preview" id="imagePreview" hidden></div>
               <textarea
                 id="composer"
                 rows="1"
                 dir="auto"
-                data-i18n-placeholder="sendCommand"
-                placeholder="یک دستور بفرست… (ایده / fix: / feature: / ‏/report / ‏/exit)"
+                data-i18n-placeholder="placeholder_po"
+                placeholder="چی بسازیم؟ بنویس…"
               ></textarea>
               <div class="composer-inner-foot">
-                <span class="hint-tip" data-i18n="enterToSend">Enter to send · Shift+Enter new line</span>
+                <!-- per-mode tools -->
+                <div class="composer-tools" id="composerTools">
+                  <div class="ctool" data-ctool="po">
+                    <span class="hint-tip" data-i18n="poToolHint">Product Owner turns your request into tasks</span>
+                  </div>
+                  <div class="ctool" data-ctool="chat" hidden>
+                    <button class="tool-chip img-trigger" type="button">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                      <span data-i18n="imageAttach">Image</span>
+                    </button>
+                    <span class="hint-tip" data-i18n="chatToolHint">Ask the model — no files change</span>
+                  </div>
+                  <div class="ctool" data-ctool="agent" hidden>
+                    <button class="tool-chip img-trigger" type="button">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                      <span data-i18n="imageAttach">Image</span>
+                    </button>
+                    <label class="push-toggle"><input type="checkbox" id="agentPush" checked> <span data-i18n="agentPushLabel">Push after code</span></label>
+                  </div>
+                </div>
                 <div class="action-btns">
                   <button id="stopBtn" class="action-btn stop-btn" style="display:none" title="Stop">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
@@ -119,6 +145,7 @@
                 </div>
               </div>
             </div>
+            <input type="file" id="imageFileInput" accept="image/*" hidden />
           </div>
         </div>
       </aside>
@@ -142,6 +169,15 @@
         </div>
 
         <div class="mtab-panel" id="view-board">
+          <div class="board-bar">
+            <button class="exec-btn" id="execToggle" type="button">
+              <span class="exec-ico" id="execIco">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+              </span>
+              <span class="exec-label" id="execLabel" data-i18n="execStart">Start auto-run</span>
+            </button>
+            <span class="auto-hint" id="autoHint"></span>
+          </div>
           <div class="board" id="board"></div>
         </div>
 
@@ -243,6 +279,22 @@
       </div>
     </div>
 
+    <!-- MODEL PICKER MODAL -->
+    <div class="modal-overlay" id="modelOverlay" hidden>
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <div>
+            <h2 data-i18n="modelsTitle">انتخاب مدل</h2>
+            <p class="modal-sub" data-i18n="modelsDesc">موتور هوش مصنوعی فعال را انتخاب کن.</p>
+          </div>
+          <button class="modal-close" id="modelClose" data-i18n-title="close" title="بستن">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="model-list" id="modelList"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- SETTINGS MODAL -->
     <div class="modal-overlay" id="settingsOverlay" hidden>
       <div class="modal" role="dialog" aria-modal="true">
@@ -301,7 +353,12 @@
           <button class="stab" data-btab="anthropic">
             <!-- Gemini/Google icon -->
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><path d="M20.2 20.2c2.04-2.03.02-7.36-4.5-11.9-4.54-4.52-9.87-6.54-11.9-4.5-2.04 2.03-.02 7.36 4.5 11.9 4.54 4.52 9.87 6.54 11.9 4.5z"/><path d="M15.7 15.7c4.52-4.54 6.54-9.87 4.5-11.9-2.03-2.04-7.36-.02-11.9 4.5-4.52 4.54-6.54 9.87-4.5 11.9 2.03 2.04 7.36.02 11.9-4.5z"/></svg>
-            <span>Gemini CLI</span>
+            <span>Gemini</span>
+          </button>
+          <button class="stab" data-btab="ollama">
+            <!-- Local server icon for Ollama -->
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+            <span>Ollama</span>
           </button>
         </div>
         <!-- ═══════════ CLAUDE ═══════════ -->
@@ -358,48 +415,70 @@ sudo apt-get install -y nodejs</code><button class="bh-copy" title="کپی">⧉<
           </div>
         </div>
 
-        <!-- ═══════════ GEMINI CLI ═══════════ -->
+        <!-- ═══════════ GEMINI (API KEY) ═══════════ -->
         <div class="modal-body" id="bridgeHelpAnthropic" style="display:none">
-          <div class="bh-note">Gemini CLI ابزار رسمی Google برای استفاده از Gemini است — رایگان با اکانت Google. نصب از طریق npm انجام می‌شود (Node.js لازم دارد).</div>
+          <div class="bh-note">Gemini حالا مثل GapGPT با یک API Key کار می‌کند — نیازی به نصب CLI نیست. کلید را رایگان از Google AI Studio بگیرید و در تنظیمات وارد کنید.</div>
 
-          <div class="bh-section-title">① نصب Node.js (اگر ندارید)</div>
-          <div class="bh-os-tabs" data-group="gemini-node">
+          <div class="bh-section-title">① دریافت API Key</div>
+          <div class="bh-step">
+            <div class="bh-step-label">به Google AI Studio بروید و یک کلید API بسازید:</div>
+            <div class="bh-cmd"><code>https://aistudio.google.com/apikey</code><button class="bh-copy" title="کپی">⧉</button></div>
+          </div>
+
+          <div class="bh-section-title">② ذخیره‌ی کلید در تنظیمات</div>
+          <div class="bh-step">
+            <div class="bh-step-label">از داشبورد، چرخ‌دنده‌ی تنظیمات ← بخش Gemini، کلید را در فیلد «کلید API جمینای» وارد و ذخیره کنید. (در صورت تمایل می‌توانید مدل را هم در «مدل» مشخص کنید — پیش‌فرض gemini-2.5-pro.)</div>
+            <div class="bh-note">به‌جای داشبورد می‌توانید مستقیم در فایل <code>secrets.env</code> هم اضافه کنید:</div>
+            <div class="bh-cmd"><code>GEMINI_API_KEY=AIza...your-key-here</code><button class="bh-copy" title="کپی">⧉</button></div>
+          </div>
+
+          <div class="bh-section-title">③ اجرای پل</div>
+          <div class="bh-step">
+            <div class="bh-cmd bh-bridge-run"><code>node claude-bridge.js</code><button class="bh-copy" title="کپی">⧉</button></div>
+            <div class="bh-note">سپس از داشبورد، موتور را به «Gemini» تغییر دهید. تغییر کلید بدون ری‌استارت پل اعمال می‌شود.</div>
+          </div>
+        </div>
+
+        <!-- ═══════════ OLLAMA (LOCAL) ═══════════ -->
+        <div class="modal-body" id="bridgeHelpOllama" style="display:none">
+          <div class="bh-note">Ollama مدل‌ها را روی همین دستگاه به‌صورت محلی اجرا می‌کند — برای مواقع اضطراری (بدون اینترنت / تمام‌شدن سهمیه). نیازی به API Key ندارد.</div>
+
+          <div class="bh-section-title">① نصب Ollama</div>
+          <div class="bh-os-tabs" data-group="ollama-install">
             <button class="bh-os-tab active" data-os="mac"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> Mac</button>
             <button class="bh-os-tab" data-os="win"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg> Windows</button>
             <button class="bh-os-tab" data-os="linux"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 12h6M9 16h6M9 8h6"/></svg> Linux</button>
           </div>
-          <div class="bh-os-panel active" data-group="gemini-node" data-os="mac">
-            <div class="bh-cmd"><code>brew install node</code><button class="bh-copy" title="کپی">⧉</button></div>
+          <div class="bh-os-panel active" data-group="ollama-install" data-os="mac">
+            <div class="bh-cmd"><code>brew install ollama</code><button class="bh-copy" title="کپی">⧉</button></div>
+            <div class="bh-note">یا از <code>https://ollama.com/download</code> دانلود کنید.</div>
           </div>
-          <div class="bh-os-panel" data-group="gemini-node" data-os="win">
-            <div class="bh-cmd"><code>winget install OpenJS.NodeJS</code><button class="bh-copy" title="کپی">⧉</button></div>
+          <div class="bh-os-panel" data-group="ollama-install" data-os="win">
+            <div class="bh-step"><div class="bh-step-label">نصب‌کننده را از سایت دانلود و اجرا کنید:</div>
+              <div class="bh-cmd"><code>https://ollama.com/download/windows</code><button class="bh-copy" title="کپی">⧉</button></div>
+            </div>
           </div>
-          <div class="bh-os-panel" data-group="gemini-node" data-os="linux">
-            <div class="bh-cmd"><code>curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
-sudo apt-get install -y nodejs</code><button class="bh-copy" title="کپی">⧉</button></div>
-          </div>
-
-          <div class="bh-section-title">② نصب Gemini CLI</div>
-          <div class="bh-step">
-            <div class="bh-cmd"><code>npm install -g @google/gemini-cli</code><button class="bh-copy" title="کپی">⧉</button></div>
+          <div class="bh-os-panel" data-group="ollama-install" data-os="linux">
+            <div class="bh-cmd"><code>curl -fsSL https://ollama.com/install.sh | sh</code><button class="bh-copy" title="کپی">⧉</button></div>
           </div>
 
-          <div class="bh-section-title">③ ورود با اکانت Google</div>
+          <div class="bh-section-title">② دانلود یک مدل</div>
           <div class="bh-step">
-            <div class="bh-cmd"><code>gemini</code><button class="bh-copy" title="کپی">⧉</button></div>
-            <div class="bh-note">دستور بالا مرورگر را باز می‌کند — با اکانت Google خود وارد شوید. بعد از ورود می‌توانید ترمینال را ببندید.</div>
+            <div class="bh-cmd"><code>ollama pull llama3.1</code><button class="bh-copy" title="کپی">⧉</button></div>
+            <div class="bh-note">می‌توانید هر مدل دیگری را هم بکشید (مثلاً <code>qwen2.5-coder</code>) و نامش را در تنظیمات بخش Ollama وارد کنید.</div>
           </div>
 
-          <div class="bh-section-title">④ تست سریع</div>
+          <div class="bh-section-title">③ اجرای سرویس Ollama</div>
           <div class="bh-step">
-            <div class="bh-cmd"><code>gemini -p "سلام"</code><button class="bh-copy" title="کپی">⧉</button></div>
-            <div class="bh-note">اگر جواب گرفتید، آماده است. اگر خطا داد، دوباره <code>gemini</code> را اجرا کنید تا login کامل شود.</div>
+            <div class="bh-cmd"><code>ollama serve</code><button class="bh-copy" title="کپی">⧉</button></div>
+            <div class="bh-note">روی پورت 11434 گوش می‌دهد. (در ویندوز/مک معمولاً بعد از نصب خودکار اجرا می‌شود.)</div>
           </div>
 
-          <div class="bh-section-title">⑤ اجرای پل</div>
+          <div class="bh-section-title">④ تنظیمات و اجرای پل</div>
           <div class="bh-step">
+            <div class="bh-step-label">در تنظیمات بخش Ollama، در صورت نیاز آدرس پایه و نام مدل را تغییر دهید (پیش‌فرض‌ها معمولاً کافی‌اند). سپس پل را اجرا کنید:</div>
             <div class="bh-cmd bh-bridge-run"><code>node claude-bridge.js</code><button class="bh-copy" title="کپی">⧉</button></div>
-            <div class="bh-note">سپس از داشبورد، موتور را به «Gemini CLI» تغییر دهید.</div>
+            <div class="bh-note">سپس از داشبورد، موتور را به «Ollama (محلی)» تغییر دهید.</div>
           </div>
         </div>
 
@@ -443,6 +522,24 @@ sudo apt-get install -y nodejs</code><button class="bh-copy" title="کپی">⧉<
         </div>
         <div class="modal-foot">
           <button class="send" id="bridgeHelpDoneBtn" data-i18n="close">بستن</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONFIRM / ALERT MODAL (replaces native browser dialogs) -->
+    <div class="modal-overlay" id="confirmOverlay" hidden>
+      <div class="modal modal-confirm" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <div>
+            <h2 id="confirmTitle" data-i18n="confirmTitle">تأیید</h2>
+          </div>
+        </div>
+        <div class="modal-body">
+          <p id="confirmMessage" class="confirm-msg"></p>
+        </div>
+        <div class="modal-foot">
+          <button class="mini-btn confirm-cancel" id="confirmCancel" data-i18n="cancel">انصراف</button>
+          <button class="send" id="confirmOk" data-i18n="confirmOk">تأیید</button>
         </div>
       </div>
     </div>

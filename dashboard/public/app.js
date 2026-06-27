@@ -10,6 +10,9 @@ let prFilter = 'open';
 let activeMainTab = 'board';
 let activeSettingsTab = 'tokens';
 let currentLang = 'fa'; // default to Persian
+let composerMode = 'po'; // 'po' (Product Owner → tasks) | 'chat' (Q&A) | 'agent' (codes)
+let pendingImagePath = null; // absolute path returned by /api/upload
+let currentAutoMode = false; // when true, board tasks run via workflow → manual run disabled
 
 // Translation system
 const translations = {
@@ -22,6 +25,11 @@ const translations = {
     bugs: "باگ",
     fixes: "فیکس",
     activeModel: "مدل فعال",
+    modelsTitle: "انتخاب مدل",
+    modelsDesc: "موتور هوش مصنوعی فعال را انتخاب کن.",
+    modelActive: "فعال",
+    modelKindCli: "CLI",
+    modelKindHttp: "API",
     systemStatus: "وضعیت سیستم",
     bridgeOffline: "پل خاموش است",
     bridgeNotReady: "پل آماده نیست",
@@ -103,6 +111,9 @@ const translations = {
     projectsDesc: "پروژهٔ جدید بساز، یا پروژه‌های موجود را تغییر نام بده / حذف کن.",
     rename: "تغییر نام",
     delete: "حذف",
+    cancel: "انصراف",
+    confirmTitle: "تأیید",
+    confirmOk: "تأیید",
     deleteProjectConfirm: "این پروژه و همه‌ی چت‌هایش حذف شود؟",
     chats: "چت‌ها",
     newChatPlaceholder: "عنوان چت (اختیاری)",
@@ -150,7 +161,44 @@ const translations = {
     bridgeOpenAiDesc: "برای استفاده از OpenAI:",
     bridgeStep1: "ایجاد حساب کاربری در Anthropic",
     bridgeStep2: "دریافت API Key",
-    bridgeStep3: "وارد کردن API Key در تنظیمات"
+    bridgeStep3: "وارد کردن API Key در تنظیمات",
+    checkout: "رفتن روی برنچ",
+    connectGit: "اتصال به گیت‌هاب",
+    connectGitDesc: "این پوشه هنوز به گیت‌هاب متصل نیست. آدرس ریپوی گیت‌هاب را وارد کن تا کانکت و پوش بشه.",
+    gitUrlPlaceholder: "owner/repo یا https://github.com/owner/repo",
+    connectAndPush: "اتصال و پوش",
+    modeCommand: "دستور",
+    modeChat: "چت",
+    modeAgent: "Agent",
+    imageAttach: "تصویر دیزاین",
+    imageRemove: "حذف تصویر",
+    agentPushLabel: "پوش بعد از کد",
+    chatToolHint: "پرسش از مدل · بدون تغییر فایل",
+    modePo: "محصول",
+    poToolHint: "Product Owner درخواستت را به تسک تبدیل می‌کند",
+    modeHelp_po: "با Product Owner چت کن؛ او یا جواب می‌دهد یا درخواست‌ها را به تسک تبدیل می‌کند. ریپو از قبل معلوم است.",
+    modeHelp_command: "دستورهای ساختاریافته: گزارش و مدل را اجرا می‌کند.",
+    modeHelp_chat: "گفتگوی آزاد با مدل برای پرسش و مشورت. هیچ فایلی تغییر نمی‌کند.",
+    modeHelp_agent: "مدل روی کد پروژه (برنچ فعلی) کار می‌کند: فایل می‌خواند، تغییر می‌دهد و در صورت فعال‌بودن پوش، کامیت و پوش می‌کند.",
+    placeholder_po: "چی بسازیم؟ بنویس…",
+    placeholder_command: "یک دستور بفرست… (‏/report / ‏/model)",
+    placeholder_chat: "یک سؤال بپرس…",
+    placeholder_agent: "به agent بگو روی کد چه کاری انجام دهد…",
+    sendCommand: "یک دستور بفرست…",
+    chatPlaceholder: "چی بسازیم؟ بنویس…",
+    chatLead: "با Product Owner چت کن؛ او درخواست‌ها را به تسک تبدیل می‌کند.",
+    copy: "کپی",
+    copied: "کپی شد",
+    execStart: "شروع اجرای خودکار",
+    execStop: "توقف اجرای خودکار",
+    execHintOn: "▶️ اجرای خودکار روشن است — تسک‌ها خودکار اجرا، ریویو و در develop مرج می‌شوند. اجرای دستی قفل است.",
+    execHintOff: "اجرای دستی فعال است. برای سپردن کامل اجرا به سیستم، «شروع اجرای خودکار» را بزن.",
+    execConfirmOn: "از این پس تسک‌های این پروژه به‌صورت خودکار اجرا، ریویو و به develop مرج می‌شوند (روی گیت‌هاب واقعی). ادامه می‌دهی؟",
+    execConfirmOff: "اجرای خودکار متوقف می‌شود؛ از این پس تسک‌ها فقط دستی اجرا می‌شوند. ادامه می‌دهی؟",
+    autoMode: "حالت خودکار",
+    autoHintOn: "🔒 تسک‌ها خودکار توسط ورک‌فلو اجرا می‌شوند. اجرای دستی غیرفعال است.",
+    autoHintOff: "اجرای دستی فعال است. برای سپردن اجرا به ورک‌فلو، روشن کن.",
+    autoLocked: "🔒 حالت خودکار روشن است — اجرای دستی غیرفعال"
   },
   en: {
     brandTitle: "Command Center",
@@ -161,6 +209,11 @@ const translations = {
     bugs: "Bugs",
     fixes: "Fixes",
     activeModel: "Active Model",
+    modelsTitle: "Select Model",
+    modelsDesc: "Choose the active AI engine.",
+    modelActive: "Active",
+    modelKindCli: "CLI",
+    modelKindHttp: "API",
     systemStatus: "System Status",
     bridgeOffline: "Bridge is offline",
     bridgeNotReady: "Bridge is not ready",
@@ -242,6 +295,9 @@ const translations = {
     projectsDesc: "Create a new project, or rename/delete existing projects.",
     rename: "Rename",
     delete: "Delete",
+    cancel: "Cancel",
+    confirmTitle: "Confirm",
+    confirmOk: "Confirm",
     deleteProjectConfirm: "Delete this project and all its chats?",
     chats: "Chats",
     newChatPlaceholder: "Chat title (optional)",
@@ -289,7 +345,44 @@ const translations = {
     bridgeOpenAiDesc: "To use OpenAI:",
     bridgeStep1: "Create an account on Anthropic",
     bridgeStep2: "Get your API Key",
-    bridgeStep3: "Enter your API Key in settings"
+    bridgeStep3: "Enter your API Key in settings",
+    checkout: "Checkout",
+    connectGit: "Connect to GitHub",
+    connectGitDesc: "This folder is not connected to GitHub yet. Enter the GitHub repo URL to connect and push.",
+    gitUrlPlaceholder: "owner/repo or https://github.com/owner/repo",
+    connectAndPush: "Connect & Push",
+    modeCommand: "Command",
+    modeChat: "Chat",
+    modeAgent: "Agent",
+    imageAttach: "Design image",
+    imageRemove: "Remove image",
+    agentPushLabel: "Push after code",
+    chatToolHint: "Ask the model — no files change",
+    modePo: "Product Owner",
+    poToolHint: "Product Owner turns your request into tasks",
+    modeHelp_po: "Chat with the Product Owner — it answers or breaks your request into tasks. The repo is already known.",
+    modeHelp_command: "Structured commands: run reports and switch models.",
+    modeHelp_chat: "Free chat with the model for questions and planning. No files are changed.",
+    modeHelp_agent: "The model works on your project code (current branch): reads, edits files, and commits & pushes if push is on.",
+    placeholder_po: "What should we build? Type here…",
+    placeholder_command: "Send a command… (/report / /model)",
+    placeholder_chat: "Ask a question…",
+    placeholder_agent: "Tell the agent what to do with the code…",
+    sendCommand: "Send a command…",
+    chatPlaceholder: "What should we build? Type here…",
+    chatLead: "Chat with the Product Owner — it turns your requests into tasks.",
+    copy: "Copy",
+    copied: "Copied",
+    execStart: "Start auto-run",
+    execStop: "Stop auto-run",
+    execHintOn: "▶️ Auto-run is on — tasks are executed, reviewed and merged to develop automatically. Manual run is locked.",
+    execHintOff: "Manual run is on. Hit “Start auto-run” to hand execution fully to the system.",
+    execConfirmOn: "From now on this project's tasks will be executed, reviewed and merged to develop automatically (on real GitHub). Continue?",
+    execConfirmOff: "Auto-run will stop; from now on tasks run only manually. Continue?",
+    autoMode: "Auto mode",
+    autoHintOn: "🔒 Tasks run automatically via the workflow. Manual run is disabled.",
+    autoHintOff: "Manual run is on. Turn on to let the workflow run tasks.",
+    autoLocked: "🔒 Auto mode is on — manual run disabled"
   }
 };
 
@@ -360,6 +453,8 @@ let activeSessionId = null;
 let currentProjects = [];
 let currentSessions = [];
 let busy = false; // a command is running in the active session → lock switching
+let activeEngineKind = ''; // 'cli' | 'http' — agent streaming is CLI-only
+let currentStreamAbort = null; // AbortController for an in-flight agent stream
 const msgCache = new Map(); // sessionId → messages (instant switch without refetch)
 const LS = {
   proj: 'mc_projectId',
@@ -380,12 +475,95 @@ function timeAgo(ts) {
   if (s < 86400) return faNum(Math.floor(s / 3600)) + (currentLang === 'fa' ? ' ساعت' : t('hoursAgo'));
   return faNum(Math.floor(s / 86400)) + (currentLang === 'fa' ? ' روز' : t('daysAgo'));
 }
+// Compact absolute stamp shown inside each chat bubble: "MM/DD HH:MM" (localized digits).
+function fmtStamp(ts) {
+  const d = new Date(typeof ts === 'string' ? new Date(ts).getTime() : ts);
+  const p2 = (n) => String(n).padStart(2, '0');
+  return faNum(p2(d.getMonth() + 1) + '/' + p2(d.getDate()) + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()));
+}
 function el(tag, cls, text) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
   if (text != null) e.textContent = text;
   return e;
 }
+
+// ---------- inline SVG icons (consistent feather-style across the app) ----------
+// Returns a <span> wrapper holding a stroked 24×24 SVG built from `inner` paths.
+function svgIcon(inner, size = 15, cls) {
+  const span = document.createElement('span');
+  span.className = 'svg-ic' + (cls ? ' ' + cls : '');
+  span.innerHTML =
+    '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" ' +
+    'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    inner + '</svg>';
+  return span;
+}
+
+// Board column icons, keyed by column.key (replaces the old emoji column glyphs).
+const COLUMN_ICONS = {
+  todo: '<rect x="9" y="2" width="6" height="4" rx="1"/><path d="M9 4H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>',
+  prog: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+  wait: '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>',
+  review: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
+  owner: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+};
+const COLUMN_ICON_FALLBACK = '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>';
+// Card counter icons (replace 🔴 bug / 🛠️ fix glyphs).
+const ICON_BUG = '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>';
+const ICON_FIX = '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>';
+// Per-engine icons for the model picker (id → svg inner).
+const MODEL_ICONS = {
+  'claude-pro': '<path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0 0h18"/>',
+  gemini: '<circle cx="12" cy="12" r="1"/><path d="M20.2 20.2c2.04-2.03.02-7.36-4.5-11.9-4.54-4.52-9.87-6.54-11.9-4.5-2.04 2.03-.02 7.36 4.5 11.9 4.54 4.52 9.87 6.54 11.9 4.5z"/><path d="M15.7 15.7c4.52-4.54 6.54-9.87 4.5-11.9-2.03-2.04-7.36-.02-11.9 4.5-4.52 4.54-6.54 9.87-4.5 11.9 2.03 2.04 7.36.02 11.9-4.5z"/>',
+  gapgpt: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  ollama: '<rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>',
+};
+const MODEL_ICON_FALLBACK = '<path d="M12 2a5 5 0 0 1 5 5v1a5 5 0 0 1-5 5a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5z"/><path d="M9 17v1a3 3 0 0 0 6 0v-1"/><path d="M6.3 16.8A7 7 0 0 1 5 12"/><path d="M17.7 16.8A7 7 0 0 0 19 12"/>';
+
+// ---------- styled confirm / alert (replaces native browser dialogs) ----------
+let _confirmResolve = null;
+function _closeConfirm(result) {
+  const ov = document.getElementById('confirmOverlay');
+  if (ov) ov.hidden = true;
+  const r = _confirmResolve;
+  _confirmResolve = null;
+  if (r) r(result);
+}
+// returns a Promise<boolean>; opts: { title, okLabel, cancelLabel, danger, alert }
+function showConfirm(message, opts = {}) {
+  return new Promise((resolve) => {
+    // if a previous dialog is open, cancel it first
+    if (_confirmResolve) _closeConfirm(false);
+    _confirmResolve = resolve;
+    const ov = document.getElementById('confirmOverlay');
+    document.getElementById('confirmTitle').textContent = opts.title || t('confirmTitle');
+    document.getElementById('confirmMessage').textContent = message;
+    const ok = document.getElementById('confirmOk');
+    ok.textContent = opts.okLabel || t('confirmOk');
+    ok.classList.toggle('danger', !!opts.danger);
+    const cancel = document.getElementById('confirmCancel');
+    // alert mode: a single OK button, no cancel
+    cancel.style.display = opts.alert ? 'none' : '';
+    cancel.textContent = opts.cancelLabel || t('cancel');
+    ov.hidden = false;
+    ok.focus();
+  });
+}
+const showAlert = (message, opts = {}) => showConfirm(message, { ...opts, alert: true });
+
+(function initConfirm() {
+  const ov = document.getElementById('confirmOverlay');
+  if (!ov) return;
+  document.getElementById('confirmOk').addEventListener('click', () => _closeConfirm(true));
+  document.getElementById('confirmCancel').addEventListener('click', () => _closeConfirm(false));
+  ov.addEventListener('click', (e) => { if (e.target === ov) _closeConfirm(false); });
+  document.addEventListener('keydown', (e) => {
+    if (ov.hidden) return;
+    if (e.key === 'Escape') _closeConfirm(false);
+    else if (e.key === 'Enter') _closeConfirm(true);
+  });
+})();
 const ROLE_LABEL = { 
   user: () => t('you'), 
   agent: () => t('system'), 
@@ -423,14 +601,8 @@ async function loadProjects() {
 }
 
 function renderProjects() {
-  const sel = $('projectSelect');
-  sel.innerHTML = '';
-  for (const p of currentProjects) {
-    const o = el('option', null, p.name);
-    o.value = p.id;
-    sel.appendChild(o);
-  }
-  if (activeProjectId) sel.value = activeProjectId;
+  const active = currentProjects.find((p) => p.id === activeProjectId);
+  $('projectName').textContent = active ? active.name : '—';
 }
 
 async function loadSessions() {
@@ -455,14 +627,8 @@ async function loadSessions() {
 }
 
 function renderSessions() {
-  const sel = $('sessionSelect');
-  sel.innerHTML = '';
-  for (const s of currentSessions) {
-    const o = el('option', null, s.title);
-    o.value = s.id;
-    sel.appendChild(o);
-  }
-  if (activeSessionId) sel.value = activeSessionId;
+  const active = currentSessions.find((s) => s.id === activeSessionId);
+  $('sessionName').textContent = active ? active.title : '—';
 }
 
 // paint the active session from cache (or clear) so a switch shows no stale chat
@@ -481,7 +647,8 @@ async function selectProject(pid) {
   paintCachedBoard();
   paintCachedSession();
   lastActivitySig = null; // force a re-render even if the new session is empty
-  await Promise.all([refreshActivity(), refreshState()]);
+  // sync the canonical tasks file → Trello so this project always shows its own tasks
+  await Promise.all([refreshActivity(), refreshState(true)]);
   if (activeMainTab === 'repo') refreshRepo();
 }
 
@@ -489,7 +656,7 @@ async function selectSession(sid) {
   if (busy || sid === activeSessionId) return;
   activeSessionId = sid;
   localStorage.setItem(LS.sess(activeProjectId), sid);
-  $('sessionSelect').value = sid; // keep the dropdown in sync when called programmatically
+  renderSessions(); // keep the chip label in sync when called programmatically
   paintCachedSession();
   lastActivitySig = null;
   await refreshActivity();
@@ -581,7 +748,7 @@ async function createProjectFromModal() {
 
 async function deleteProject(pid, { force = false } = {}) {
   if (!force && currentProjects.length <= 1) return;
-  if (!confirm(t('deleteProjectConfirm'))) return;
+  if (!(await showConfirm(t('deleteProjectConfirm'), { danger: true, okLabel: t('delete') }))) return;
   try {
     await api('/api/projects/' + pid, { method: 'DELETE' });
     await loadProjects();
@@ -649,7 +816,7 @@ async function createSessionFromModal() {
 
 async function deleteSession(sid) {
   if (currentSessions.length <= 1) return;
-  if (!confirm(t('deleteChatConfirm'))) return;
+  if (!(await showConfirm(t('deleteChatConfirm'), { danger: true, okLabel: t('delete') }))) return;
   try {
     await api('/api/sessions/' + sid + '?projectId=' + encodeURIComponent(activeProjectId), { method: 'DELETE' });
     msgCache.delete(sid);
@@ -681,8 +848,9 @@ function inlineRename(nameEl, current, onSave) {
   input.addEventListener('blur', () => finish(true));
 }
 
-$('projectSelect').addEventListener('change', (e) => selectProject(e.target.value));
-$('sessionSelect').addEventListener('change', (e) => selectSession(e.target.value));
+// project / session names are now dialog-opening chips (lists live in modals)
+$('projectSelect').addEventListener('click', openProjects);
+$('sessionSelect').addEventListener('click', openSessions);
 $('newProjectBtn').addEventListener('click', openProjects);
 $('newSessionBtn').addEventListener('click', openSessions);
 $('projectsClose').addEventListener('click', closeProjects);
@@ -823,7 +991,7 @@ async function renderRepo(r) {
     const autoMsg = (isLocal ? (t('localFolderMissing') || 'Local folder not found') : (t('cloneFolderMissing') || 'Cloned folder not found'))
       + '\n' + (t('pathDoesNotExist') || 'The path no longer exists.')
       + '\n\n' + (t('deleteProjectConfirm') || 'Remove this project from the list?');
-    if (confirm(autoMsg)) {
+    if (await showConfirm(autoMsg, { danger: true, okLabel: t('delete') })) {
       await deleteProject(activeProjectId, { force: true });
       if (currentProjects.length === 0) {
         const def = await api('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'My Project' }) });
@@ -935,6 +1103,15 @@ async function renderRepo(r) {
     box.appendChild(el('div', 'empty', msg));
     return;
   }
+  // git connect button for local repos without a remote
+  if (isLocal && r.needsGitConnect) {
+    const connectWrap = el('div', 'repo-connect-wrap');
+    const connectBtn = el('button', 'send', '🔗 ' + t('connectGit'));
+    connectBtn.addEventListener('click', () => showGitConnectDialog(r.dir));
+    connectWrap.appendChild(connectBtn);
+    box.appendChild(connectWrap);
+  }
+
   const list = el('div', 'branch-list');
   for (const b of branches) {
     const row = el('div', 'branch-row');
@@ -943,9 +1120,74 @@ async function renderRepo(r) {
     row.appendChild(el('span', 'branch-name' + (isCur ? ' current' : ''), b));
     if (isCur) row.appendChild(el('span', 'branch-tag cur', t('current')));
     if (isDef) row.appendChild(el('span', 'branch-tag def', t('default')));
+    if (!isCur && r.cloned) {
+      const coBtn = el('button', 'mini-btn', t('checkout'));
+      coBtn.addEventListener('click', async () => {
+        coBtn.disabled = true;
+        coBtn.textContent = '…';
+        try {
+          const res = await api('/api/checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ projectId: activeProjectId, branch: b }),
+          });
+          if (res && res.ok) renderRepo(res);
+          else { coBtn.disabled = false; coBtn.textContent = t('checkout'); showAlert(t('error') + (res && res.error || '')); }
+        } catch (e) { coBtn.disabled = false; coBtn.textContent = t('checkout'); }
+      });
+      row.appendChild(coBtn);
+    }
     list.appendChild(row);
   }
   box.appendChild(list);
+}
+
+function showGitConnectDialog(localDir) {
+  const overlay = el('div', 'settings-overlay');
+  overlay.id = 'gitConnectOverlay';
+  overlay.style.display = 'flex';
+  const box = el('div', 'settings-box');
+  box.style.maxWidth = '440px';
+  const title = el('h2', null, '🔗 ' + t('connectGit'));
+  const desc = el('p', null, t('connectGitDesc'));
+  desc.style.fontSize = '13px';
+  desc.style.opacity = '0.8';
+  const inp = el('input', 'field-input');
+  inp.placeholder = t('gitUrlPlaceholder');
+  inp.style.marginTop = '12px';
+  inp.style.width = '100%';
+  const errDiv = el('div', 'repo-err');
+  errDiv.style.display = 'none';
+  const foot = el('div', 'settings-foot');
+  const cancelBtn = el('button', 'mini-btn', t('close'));
+  cancelBtn.addEventListener('click', () => overlay.remove());
+  const submitBtn = el('button', 'send', t('connectAndPush'));
+  submitBtn.addEventListener('click', async () => {
+    const url = inp.value.trim();
+    if (!url) return;
+    submitBtn.disabled = true;
+    submitBtn.textContent = t('running');
+    errDiv.style.display = 'none';
+    try {
+      const res = await api('/api/repo/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: activeProjectId, remoteUrl: url }),
+      });
+      if (res && res.ok) { overlay.remove(); renderRepo(res); }
+      else { errDiv.textContent = t('error') + (res && res.error || ''); errDiv.style.display = 'block'; submitBtn.disabled = false; submitBtn.textContent = t('connectAndPush'); }
+    } catch (e) { errDiv.textContent = e.message; errDiv.style.display = 'block'; submitBtn.disabled = false; submitBtn.textContent = t('connectAndPush'); }
+  });
+  foot.appendChild(cancelBtn);
+  foot.appendChild(submitBtn);
+  box.appendChild(title);
+  box.appendChild(desc);
+  box.appendChild(inp);
+  box.appendChild(errDiv);
+  box.appendChild(foot);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  inp.focus();
 }
 
 $('mainTabs').addEventListener('click', (e) => {
@@ -955,11 +1197,13 @@ $('mainTabs').addEventListener('click', (e) => {
 });
 
 // ---------- state / board ----------
-async function refreshState() {
+async function refreshState(sync) {
   if (!activeProjectId) return;
   let s;
   try {
-    s = await api('/api/state?projectId=' + encodeURIComponent(activeProjectId));
+    // sync=1 → server reads this project's canonical tasks file and (re)creates
+    // any missing Trello cards before building the board (used on project switch).
+    s = await api('/api/state?projectId=' + encodeURIComponent(activeProjectId) + (sync ? '&sync=1' : ''));
   } catch (e) {
     setHealth('bad', t('bridgeOffline'));
     return;
@@ -990,6 +1234,10 @@ async function refreshState() {
     link.hidden = true;
   }
 
+  // auto mode: reflect the project's stored flag on the Play/Stop button + hint
+  currentAutoMode = !!(s.project && s.project.autoMode);
+  renderExecButton();
+
   $('statTasks').textContent = faNum(s.totals.tasks);
   $('statBugs').textContent = faNum(s.totals.bugs);
   $('statFixes').textContent = faNum(s.totals.fixes);
@@ -1015,37 +1263,66 @@ function setHealth(cls, label) {
   $('bridgeLabel').textContent = label;
 }
 
-// ---------- model picker ----------
+// ---------- model picker (modal, styled like the other pickers) ----------
+let modelsData = { models: [], active: '' };
+
+function modelIcon(id, size = 15) {
+  return svgIcon(MODEL_ICONS[id] || MODEL_ICON_FALLBACK, size, 'model-ic-svg');
+}
+
 async function refreshModels() {
-  const sel = $('modelSelect');
   let data;
   try {
     data = await api('/api/models');
   } catch (e) {
     return;
   }
-  if (!data.models || !data.models.length) {
-    sel.innerHTML = '<option>—</option>';
-    sel.disabled = true;
-    return;
-  }
-  sel.disabled = false;
-  // only rebuild if the option set changed, to avoid clobbering an open dropdown
-  const sig = data.models.map((m) => m.id).join(',');
-  if (sel.dataset.sig !== sig) {
-    sel.innerHTML = '';
-    for (const m of data.models) {
-      const o = el('option', null, m.label);
-      o.value = m.id;
-      sel.appendChild(o);
-    }
-    sel.dataset.sig = sig;
-  }
-  sel.value = data.active;
+  modelsData = data || { models: [], active: '' };
+  const am = (modelsData.models || []).find((m) => m.id === modelsData.active);
+  activeEngineKind = am ? am.kind : '';
+  // update the header chip (icon + name)
+  const icon = $('modelPickIcon');
+  const name = $('modelPickName');
+  if (icon) { icon.innerHTML = ''; icon.appendChild(modelIcon(am ? am.id : '', 14)); }
+  if (name) name.textContent = am ? am.label : '—';
+  // if the modal is open, keep its list in sync
+  if (!$('modelOverlay').hidden) renderModelList();
 }
 
-$('modelSelect').addEventListener('change', async (e) => {
-  const id = e.target.value;
+function renderModelList() {
+  const list = $('modelList');
+  if (!list) return;
+  list.innerHTML = '';
+  const models = modelsData.models || [];
+  if (!models.length) {
+    list.appendChild(el('div', 'empty', t('bridgeOffline')));
+    return;
+  }
+  for (const m of models) {
+    const active = m.id === modelsData.active;
+    const row = el('button', 'model-row' + (active ? ' active' : ''));
+    row.type = 'button';
+    const ic = modelIcon(m.id, 18);
+    row.appendChild(ic);
+    const info = el('div', 'model-row-info');
+    info.appendChild(el('span', 'model-row-name', m.label));
+    info.appendChild(el('span', 'model-row-kind', m.kind === 'cli' ? t('modelKindCli') : t('modelKindHttp')));
+    row.appendChild(info);
+    if (active) {
+      const badge = el('span', 'model-row-badge');
+      badge.appendChild(svgIcon('<polyline points="20 6 9 17 4 12"/>', 13));
+      badge.appendChild(el('span', null, t('modelActive')));
+      row.appendChild(badge);
+    }
+    row.addEventListener('click', () => selectModel(m.id));
+    list.appendChild(row);
+  }
+}
+
+async function selectModel(id) {
+  if (id === modelsData.active) { closeModelModal(); return; }
+  modelsData.active = id; // optimistic
+  renderModelList();
   try {
     await api('/api/models', {
       method: 'POST',
@@ -1053,8 +1330,21 @@ $('modelSelect').addEventListener('change', async (e) => {
       body: JSON.stringify({ id }),
     });
   } catch (err) {}
+  closeModelModal();
+  await refreshModels();
   refreshState();
-});
+}
+
+function openModelModal() {
+  renderModelList();
+  $('modelOverlay').hidden = false;
+}
+function closeModelModal() {
+  $('modelOverlay').hidden = true;
+}
+$('modelPick').addEventListener('click', openModelModal);
+$('modelClose').addEventListener('click', closeModelModal);
+$('modelOverlay').addEventListener('click', (e) => { if (e.target === $('modelOverlay')) closeModelModal(); });
 
 function renderBoard(columns) {
   const board = $('board');
@@ -1064,7 +1354,10 @@ function renderBoard(columns) {
     total += col.cards.length;
     const c = el('div', 'column');
     const head = el('div', 'col-head');
-    head.appendChild(el('span', null, col.emoji + '  ' + col.name));
+    const headLabel = el('span', 'col-head-label');
+    headLabel.appendChild(svgIcon(COLUMN_ICONS[col.key] || COLUMN_ICON_FALLBACK, 15, 'col-ic col-ic-' + col.key));
+    headLabel.appendChild(el('span', null, col.name));
+    head.appendChild(headLabel);
     head.appendChild(el('span', 'count', faNum(col.cards.length)));
     c.appendChild(head);
 
@@ -1079,8 +1372,18 @@ function renderBoard(columns) {
       const meta = el('div', 'card-meta');
       meta.appendChild(el('span', 'tag ' + card.track, card.track));
       if (card.complexity) meta.appendChild(el('span', 'tag cx', card.complexity));
-      if (card.bugs) meta.appendChild(el('span', 'counter bug', '🔴 ' + faNum(card.bugs)));
-      if (card.fixes) meta.appendChild(el('span', 'counter fix', '🛠️ ' + faNum(card.fixes)));
+      if (card.bugs) {
+        const cb = el('span', 'counter bug');
+        cb.appendChild(svgIcon(ICON_BUG, 12));
+        cb.appendChild(el('span', null, faNum(card.bugs)));
+        meta.appendChild(cb);
+      }
+      if (card.fixes) {
+        const cf = el('span', 'counter fix');
+        cf.appendChild(svgIcon(ICON_FIX, 12));
+        cf.appendChild(el('span', null, faNum(card.fixes)));
+        meta.appendChild(cf);
+      }
       cd.appendChild(meta);
       cards.appendChild(cd);
     }
@@ -1230,8 +1533,23 @@ function renderCardAction(body, cardId, colKey) {
 
   const btn = el('button', 'run-task-btn', cfg.label);
   const msg = el('div', 'run-task-msg');
+
+  // Auto mode: the workflow runs tasks — manual run is locked.
+  if (currentAutoMode) {
+    btn.disabled = true;
+    btn.classList.add('locked');
+    btn.innerHTML = '';
+    btn.appendChild(el('span', 'lock-ico', '🔒'));
+    btn.appendChild(document.createTextNode(' ' + cfg.label));
+    msg.textContent = t('autoLocked');
+    wrap.appendChild(btn);
+    wrap.appendChild(msg);
+    body.appendChild(wrap);
+    return;
+  }
+
   btn.addEventListener('click', async () => {
-    if (!confirm(cfg.confirm)) return;
+    if (!(await showConfirm(cfg.confirm))) return;
     btn.disabled = true;
     btn.textContent = t('running');
     msg.textContent = '';
@@ -1368,6 +1686,30 @@ $('detailClose').addEventListener('click', closeDetail);
 detailOverlay.addEventListener('click', (e) => { if (e.target === detailOverlay) closeDetail(); });
 
 // ---------- activity / chat ----------
+// true while a reply is being typed out, so the background poll doesn't repaint
+// the timeline mid-animation (which is what made the typewriter look broken).
+let animating = false;
+
+// A ChatGPT-style copy button that copies `getText()` to the clipboard.
+function makeCopyBtn(getText) {
+  const btn = el('button', 'copy-btn');
+  btn.type = 'button';
+  btn.title = t('copy');
+  btn.innerHTML =
+    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' +
+    '<span class="copy-lbl">' + t('copy') + '</span>';
+  btn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(getText());
+      btn.classList.add('done');
+      btn.querySelector('.copy-lbl').textContent = t('copied');
+      setTimeout(() => { btn.classList.remove('done'); const l = btn.querySelector('.copy-lbl'); if (l) l.textContent = t('copy'); }, 1400);
+    } catch (err) {}
+  });
+  return btn;
+}
+
 function renderMessages(events) {
   const tl = $('timeline');
   const atBottom = tl.scrollHeight - tl.scrollTop - tl.clientHeight < 60;
@@ -1378,15 +1720,38 @@ function renderMessages(events) {
   }
   for (const ev of events) {
     const m = el('div', 'msg ' + (ev.role || 'agent'));
-    const who = el('div', 'who');
-    who.appendChild(el('span', null, ROLE_LABEL[ev.role] ? ROLE_LABEL[ev.role]() : t('system')));
-    who.appendChild(el('span', null, ' · ' + timeAgo(ev.ts)));
-    m.appendChild(who);
 
     const bubble = el('div', 'bubble');
     bubble.setAttribute('dir', 'auto');
+    // role + timestamp live inside the bubble now (compact, frees vertical space)
+    const meta = el('div', 'bubble-meta');
+    meta.appendChild(el('span', 'meta-who', ROLE_LABEL[ev.role] ? ROLE_LABEL[ev.role]() : t('system')));
+    bubble.appendChild(meta);
     if (ev.card) bubble.appendChild(el('span', 'card-ref', t('cardRef') + ev.card + (ev.column ? ' · ' + ev.column : '')));
-    bubble.appendChild(document.createTextNode(ev.text));
+    if (ev.text) {
+      const md = el('div', 'md-body');
+      md.innerHTML = typeof marked !== 'undefined'
+        ? marked.parse(ev.text, { breaks: true, gfm: true })
+        : ev.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+      md.querySelectorAll('pre').forEach(pre => {
+        const btn = document.createElement('button');
+        btn.className = 'code-copy-btn';
+        btn.textContent = 'copy';
+        btn.onclick = () => {
+          const code = pre.querySelector('code');
+          navigator.clipboard.writeText(code ? code.innerText : pre.innerText);
+          btn.textContent = 'copied!';
+          setTimeout(() => { btn.textContent = 'copy'; }, 1500);
+        };
+        pre.appendChild(btn);
+      });
+      bubble.appendChild(md);
+    }
+    // copy button on model/system replies (not on the user's own messages)
+    if (ev.role !== 'user' && ev.text) bubble.appendChild(makeCopyBtn(() => ev.text));
+    const tm = el('div', 'bubble-time', fmtStamp(ev.ts));
+    tm.title = timeAgo(ev.ts);
+    bubble.appendChild(tm);
     m.appendChild(bubble);
     tl.appendChild(m);
   }
@@ -1395,6 +1760,7 @@ function renderMessages(events) {
 
 async function refreshActivity() {
   if (!activeProjectId || !activeSessionId) return;
+  if (animating) return; // don't repaint mid-typewriter
   const sid = activeSessionId;
   let events = [];
   try {
@@ -1426,41 +1792,361 @@ composer.addEventListener('keydown', (e) => {
   }
 });
 
-$('quick').addEventListener('click', (e) => {
-  const btn = e.target.closest('button');
-  if (!btn) return;
-  const tpl = btn.dataset.tpl;
-  if (tpl === 'idea') composer.value = 'name: \nrepo: https://github.com/' + (currentRepo || 'USER/REPO') + '\nidea: ';
-  else composer.value = tpl + ' ';
-  autoGrow();
-  composer.focus();
-});
+// Show an animated "model is responding" bubble at the end of the timeline.
+function showTypingBubble() {
+  const tl = $('timeline');
+  const m = el('div', 'msg agent', '');
+  m.id = 'typingBubble';
+  const bubble = el('div', 'bubble');
+  const meta = el('div', 'bubble-meta');
+  meta.appendChild(el('span', 'meta-who', t('system')));
+  bubble.appendChild(meta);
+  const dots = el('div', 'typing-dots');
+  dots.appendChild(el('span')); dots.appendChild(el('span')); dots.appendChild(el('span'));
+  bubble.appendChild(dots);
+  m.appendChild(bubble);
+  tl.appendChild(m);
+  tl.scrollTop = tl.scrollHeight;
+}
+function removeTypingBubble() {
+  const b = $('typingBubble');
+  if (b) b.remove();
+}
+
+// Reveal `text` into a fresh agent bubble.
+//
+// The old char-by-char typewriter (a 18ms setInterval re-slicing a growing
+// string and forcing layout ~200×) locked the UI for seconds and, on bigger
+// replies, read as a freeze with nothing visible until it finished. We now
+// render the markdown in a single paint with a short CSS fade-in instead — the
+// "is thinking" phase is already covered by the typing-dots bubble during the
+// network wait. Kept async so callers can `await` it unchanged.
+function typeOutReply(text) {
+  return new Promise((resolve) => {
+    const tl = $('timeline');
+    const atBottom = tl.scrollHeight - tl.scrollTop - tl.clientHeight < 100;
+    const m = el('div', 'msg agent');
+    const bubble = el('div', 'bubble reply-in');
+    bubble.setAttribute('dir', 'auto');
+    const meta = el('div', 'bubble-meta');
+    meta.appendChild(el('span', 'meta-who', t('system')));
+    bubble.appendChild(meta);
+    const full = String(text || '');
+    const md = el('div', 'md-body');
+    md.setAttribute('dir', 'auto');
+    md.innerHTML = typeof marked !== 'undefined'
+      ? marked.parse(full, { breaks: true, gfm: true })
+      : full.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+    md.querySelectorAll('pre').forEach((pre) => {
+      const btn = document.createElement('button');
+      btn.className = 'code-copy-btn';
+      btn.textContent = 'copy';
+      btn.onclick = () => {
+        const code = pre.querySelector('code');
+        navigator.clipboard.writeText(code ? code.innerText : pre.innerText);
+        btn.textContent = 'copied!';
+        setTimeout(() => { btn.textContent = 'copy'; }, 1500);
+      };
+      pre.appendChild(btn);
+    });
+    bubble.appendChild(md);
+    bubble.appendChild(makeCopyBtn(() => full));
+    bubble.appendChild(el('div', 'bubble-time', fmtStamp(Date.now())));
+    m.appendChild(bubble);
+    tl.appendChild(m);
+    if (atBottom) tl.scrollTop = tl.scrollHeight;
+    resolve();
+  });
+}
+
+// Parse one raw SSE event block into { event, data } (mirror of the server's).
+function parseClientSse(raw) {
+  let event = 'message', dataStr = '';
+  for (const line of raw.split('\n')) {
+    if (line.startsWith('event:')) event = line.slice(6).trim();
+    else if (line.startsWith('data:')) dataStr += line.slice(5).trim();
+  }
+  let data = {};
+  try { data = JSON.parse(dataStr); } catch (e) {}
+  return { event, data };
+}
+
+// Stream a mode=agent run into a live terminal bubble, then swap it for the
+// markdown summary once `done` arrives. Persistence happens server-side, so the
+// trailing refreshActivity() repaint reconciles with the stored messages.
+async function streamAgent({ task, sid, push, imagePath }) {
+  const tl = $('timeline');
+  const m = el('div', 'msg agent');
+  const bubble = el('div', 'bubble term-live');
+  bubble.setAttribute('dir', 'ltr');
+  const meta = el('div', 'bubble-meta');
+  meta.appendChild(el('span', 'meta-who', t('system')));
+  bubble.appendChild(meta);
+  const term = el('div', 'term-body');
+  bubble.appendChild(term);
+  const caret = el('span', 'type-caret');
+  bubble.appendChild(caret);
+  bubble.appendChild(el('div', 'bubble-time', fmtStamp(Date.now())));
+  m.appendChild(bubble);
+  tl.appendChild(m);
+  tl.scrollTop = tl.scrollHeight;
+
+  const appendLines = (text) => {
+    const atBottom = tl.scrollHeight - tl.scrollTop - tl.clientHeight < 120;
+    for (const ln of String(text).split('\n')) {
+      const line = el('div', 'term-line', ln);
+      line.setAttribute('dir', 'auto');
+      term.appendChild(line);
+    }
+    if (atBottom) tl.scrollTop = tl.scrollHeight;
+  };
+
+  const ac = new AbortController();
+  currentStreamAbort = ac;
+  let doneData = null, errMsg = '';
+  try {
+    const resp = await fetch('/api/agent-stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task, projectId: activeProjectId, sessionId: sid, push, imagePath }),
+      signal: ac.signal,
+    });
+    if (!resp.ok || !resp.body) {
+      const j = await resp.json().catch(() => ({}));
+      errMsg = j.error || ('stream error ' + resp.status);
+    } else {
+      const reader = resp.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let idx;
+        while ((idx = buf.indexOf('\n\n')) >= 0) {
+          const ev = parseClientSse(buf.slice(0, idx));
+          buf = buf.slice(idx + 2);
+          if (ev.event === 'chunk') appendLines(ev.data.text || '');
+          else if (ev.event === 'done') doneData = ev.data;
+          else if (ev.event === 'error') errMsg = ev.data.error || 'error';
+        }
+      }
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') errMsg = e.message || 'stream error';
+  }
+  currentStreamAbort = null;
+  caret.remove();
+
+  if (doneData && (doneData.summary || '').trim()) {
+    // Swap the live terminal for the rendered markdown summary.
+    m.remove();
+    await typeOutReply(doneData.summary);
+  } else if (errMsg) {
+    appendLines('⚠️ ' + errMsg);
+    bubble.classList.add('term-error');
+  }
+}
 
 async function send() {
   if (busy) return;
   const text = composer.value.trim();
   if (!text || !activeProjectId || !activeSessionId) return;
   const sid = activeSessionId;
+  const imgPath = pendingImagePath;
   composer.value = '';
   autoGrow();
+  clearImagePreview();
   lockUI(true);
-  // optimistic echo so the user sees their message immediately
   lastActivitySig = null;
   renderMessages([...(msgCache.get(sid) || []), { id: 't' + Date.now(), ts: Date.now(), role: 'user', text }]);
+
+  // Slash power-commands always run through the command pipeline regardless of mode.
+  const isCommand = /^\/(report|finish|done|models?|model|help|start)\b/.test(text);
+  const mode = isCommand ? 'command' : composerMode;
+
+  // loading state after every prompt
+  showTypingBubble();
+
+  // Real-time streaming for agent mode (CLI engines only). The terminal bubble
+  // shows the agent's output live; non-CLI engines fall through to /api/agent.
+  if (mode === 'agent' && activeEngineKind === 'cli') {
+    removeTypingBubble();
+    const push = !$('agentPush') || $('agentPush').checked;
+    try { await streamAgent({ task: text, sid, push, imagePath: imgPath }); } catch (e) {}
+    lockUI(false);
+    lastActivitySig = null;
+    await Promise.all([refreshActivity(), refreshState()]);
+    return;
+  }
+
+  let res = null;
   try {
-    await api('/api/command', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, projectId: activeProjectId, sessionId: sid }),
-    });
+    if (mode === 'po') {
+      // Product Owner: answers and/or breaks the request into tasks
+      res = await api('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, projectId: activeProjectId, sessionId: sid }),
+      });
+    } else if (mode === 'chat') {
+      // free Q&A with the model — no files change
+      res = await api('/api/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, projectId: activeProjectId, sessionId: sid, imagePath: imgPath }),
+      });
+    } else if (mode === 'agent') {
+      // the model works on the project's code (current branch)
+      const push = !$('agentPush') || $('agentPush').checked;
+      res = await api('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task: text, projectId: activeProjectId, sessionId: sid, push, imagePath: imgPath }),
+      });
+    } else {
+      await api('/api/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, projectId: activeProjectId, sessionId: sid }),
+      });
+    }
   } catch (e) {}
+
+  removeTypingBubble();
+
+  if (mode !== 'command') {
+    const replyText = (res && (res.reply || res.summary)) || (res && res.error ? t('error') + res.error : '');
+    if (replyText) await typeOutReply(replyText);
+  }
+
   lockUI(false);
   lastActivitySig = null;
   await Promise.all([refreshActivity(), refreshState()]);
 }
 sendBtn.addEventListener('click', send);
 
+// ---------- composer mode switching + image upload ----------
+function clearImagePreview() {
+  pendingImagePath = null;
+  const prev = $('imagePreview');
+  if (prev) { prev.hidden = true; prev.innerHTML = ''; }
+}
+
+function setComposerMode(mode) {
+  composerMode = mode;
+  document.querySelectorAll('#modeSwitch .mode-btn').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
+  document.querySelectorAll('#composerTools .ctool').forEach((c) => { c.hidden = c.dataset.ctool !== mode; });
+  $('modeHelp').textContent = t('modeHelp_' + mode);
+  composer.placeholder = t('placeholder_' + mode);
+  // image is only carried in chat & agent modes
+  if (mode === 'po') clearImagePreview();
+}
+
+async function uploadImage(file) {
+  const ext = (file.name.split('.').pop() || 'png').toLowerCase();
+  const dataUrl = await new Promise((r) => { const fr = new FileReader(); fr.onload = (e) => r(e.target.result); fr.readAsDataURL(file); });
+  let res;
+  try {
+    res = await api('/api/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId: activeProjectId, ext, data: dataUrl }),
+    });
+  } catch (e) { return; }
+  if (!res || !res.ok) return;
+  pendingImagePath = res.path;
+  const prev = $('imagePreview');
+  prev.innerHTML = '';
+  const img = el('img', 'img-thumb');
+  img.src = dataUrl;
+  const meta = el('span', 'img-name', file.name);
+  const rm = el('button', 'img-remove', '✕');
+  rm.title = t('imageRemove');
+  rm.addEventListener('click', clearImagePreview);
+  prev.appendChild(img);
+  prev.appendChild(meta);
+  prev.appendChild(rm);
+  prev.hidden = false;
+}
+
+(function initComposer() {
+  $('modeSwitch').addEventListener('click', (e) => {
+    const btn = e.target.closest('.mode-btn');
+    if (btn && btn.dataset.mode) setComposerMode(btn.dataset.mode);
+  });
+  const fileInput = $('imageFileInput');
+  if (fileInput) {
+    document.querySelectorAll('.img-trigger').forEach((b) => b.addEventListener('click', () => fileInput.click()));
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files[0];
+      fileInput.value = '';
+      if (file) await uploadImage(file);
+    });
+  }
+  setComposerMode('po');
+})();
+
+// ---------- Play / Stop: automatic task execution ----------
+// Reflect the project's autoMode on the Play/Stop button (icon, label, hint).
+function renderExecButton() {
+  const btn = $('execToggle');
+  if (!btn) return;
+  const on = currentAutoMode;
+  btn.classList.toggle('running', on);
+  $('execIco').innerHTML = on
+    ? '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>'
+    : '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>';
+  $('execLabel').textContent = on ? t('execStop') : t('execStart');
+  $('autoHint').textContent = on ? t('execHintOn') : t('execHintOff');
+}
+
+(function initExecToggle() {
+  const btn = $('execToggle');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    if (!activeProjectId) return;
+    const turningOn = !currentAutoMode;
+    // confirm dialog: tell the user execution becomes automatic / manual
+    if (!(await showConfirm(turningOn ? t('execConfirmOn') : t('execConfirmOff'), { title: turningOn ? t('execStart') : t('execStop') }))) return;
+    currentAutoMode = turningOn;
+    renderExecButton();
+    try {
+      await api('/api/projects/' + encodeURIComponent(activeProjectId), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ autoMode: turningOn }),
+      });
+    } catch (e) {}
+    // re-render the board so the manual run buttons lock/unlock immediately
+    if (lastState && lastState.columns) renderBoard(lastState.columns);
+
+    // On STOP: the Product Owner writes a progress report ("how far / what's left").
+    // It's stored per project so the Developer/Tech-Lead read it on the next Start.
+    if (!turningOn && activeSessionId) {
+      lockUI(true);
+      showTypingBubble();
+      let rep = null;
+      try {
+        rep = await api('/api/po-report', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId: activeProjectId, sessionId: activeSessionId }),
+        });
+      } catch (e) {}
+      removeTypingBubble();
+      const txt = (rep && rep.report) || (rep && rep.error ? t('error') + rep.error : '');
+      if (txt) await typeOutReply(txt);
+      lockUI(false);
+      lastActivitySig = null;
+      await refreshActivity();
+    }
+  });
+})();
+
 async function stop() {
+  // Abort a live agent stream locally too (so the reader unwinds immediately).
+  if (currentStreamAbort) { try { currentStreamAbort.abort(); } catch (e) {} }
   try {
     await api('/api/stop', {
       method: 'POST',
@@ -1598,7 +2284,13 @@ async function saveSettings() {
       }
       const res = await api('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ values }) });
       if (!res.ok) { st.textContent = t('saveError'); st.className = 'save-state err'; return; }
-      await refreshState();
+      // Tokens changed → bring the panel back up with the new tokens: refresh the
+      // model picker and re-read projects / sessions / latest history from scratch.
+      msgCache.clear();
+      lastActivitySig = null;
+      await loadProjects();
+      if (activeProjectId) await loadSessions();
+      await Promise.all([refreshModels(), refreshActivity(), refreshState(true)]);
     } else {
       const panelId = activeSettingsTab === 'stacks' ? 'settingsStacks' : 'settingsRoles';
       const endpoint = '/api/' + activeSettingsTab;
@@ -1707,6 +2399,7 @@ function switchBridgeTab(tab) {
   $('bridgeHelpClaude').style.display = tab === 'claude' ? 'flex' : 'none';
   $('bridgeHelpAnthropic').style.display = tab === 'anthropic' ? 'flex' : 'none';
   $('bridgeHelpOpenAi').style.display = tab === 'openai' ? 'flex' : 'none';
+  $('bridgeHelpOllama').style.display = tab === 'ollama' ? 'flex' : 'none';
 }
 
 $('health').addEventListener('click', openBridgeHelp);
