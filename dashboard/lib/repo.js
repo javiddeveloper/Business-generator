@@ -119,7 +119,7 @@ async function status(repo) {
 
   // Detect the case where the folder was deleted manually by the user
   // (dir doesn't exist but we still want to inform the caller)
-  const out = { ok: true, repo: slug, dir, cloned, folderMissing: !dirExists && !cloned, isLocalPath };
+  const out = { ok: true, repo: slug, dir, dirExists, cloned, folderMissing: !dirExists && !cloned, isLocalPath };
 
   // For local paths, detect whether git and a remote are present
   if (isLocalPath && dirExists) {

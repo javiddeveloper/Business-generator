@@ -523,7 +523,12 @@ const server = http.createServer(async (req, res) => {
       const sid = body.sessionId;
       if (sid) store.appendMessage(body.projectId, sid, { role: 'user', text: task });
       const st = await repo.ensureGit(project.repo);
-      if (!st.cloned) return sendJson(res, 200, { ok: false, error: 'مخزن هنوز کلون نشده' });
+      if (!st.cloned) {
+        const msg = st.isLocalPath
+          ? (st.dirExists ? 'راه‌اندازی git در این پوشه‌ی محلی ناموفق بود' : 'مسیر محلی پروژه پیدا نشد: ' + st.dir)
+          : 'مخزن هنوز کلون نشده';
+        return sendJson(res, 200, { ok: false, error: msg });
+      }
       const push = body.push !== false;
       const imagePath = body.imagePath || null;
       // Prepend the engine-independent chained memory so a bridge switch keeps context.
@@ -564,7 +569,12 @@ const server = http.createServer(async (req, res) => {
       if (!project) return sendJson(res, 400, { ok: false, error: 'پروژه پیدا نشد' });
       const sid = body.sessionId;
       const st = await repo.ensureGit(project.repo);
-      if (!st.cloned) return sendJson(res, 200, { ok: false, error: 'مخزن هنوز کلون نشده' });
+      if (!st.cloned) {
+        const msg = st.isLocalPath
+          ? (st.dirExists ? 'راه‌اندازی git در این پوشه‌ی محلی ناموفق بود' : 'مسیر محلی پروژه پیدا نشد: ' + st.dir)
+          : 'مخزن هنوز کلون نشده';
+        return sendJson(res, 200, { ok: false, error: msg });
+      }
 
       if (sid) store.appendMessage(body.projectId, sid, { role: 'user', text: task });
       const push = body.push !== false;

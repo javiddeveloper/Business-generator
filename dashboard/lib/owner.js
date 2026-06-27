@@ -697,11 +697,15 @@ async function askProjectAware(prompt, maxTokens) {
   try { st = await repoLib.ensureGit(ctx.repo || ''); } catch (e) {}
   if (st && st.cloned && st.dir) {
     try {
+      const grounded =
+        'تو داخل پوشه‌ی ریشه‌ی همین پروژه اجرا می‌شوی و به ابزار Read/Grep/Glob دسترسی کامل داری. ' +
+        'فایل‌های واقعی پروژه را بررسی کن و بر اساس محتوای واقعی پاسخ بده؛ هرگز نگو که به پروژه دسترسی نداری.\n\n' +
+        prompt;
       const r = await fetch(config.bridge + '/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: ctx.signal,
-        body: JSON.stringify({ dir: st.dir, task: prompt, readonly: true, push: false }),
+        body: JSON.stringify({ dir: st.dir, task: grounded, readonly: true, push: false }),
       });
       const j = await r.json().catch(() => ({}));
       if (j && j.ok && j.summary) return j.summary;

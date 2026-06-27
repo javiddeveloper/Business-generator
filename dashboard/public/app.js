@@ -1143,26 +1143,39 @@ async function renderRepo(r) {
 }
 
 function showGitConnectDialog(localDir) {
-  const overlay = el('div', 'settings-overlay');
+  // Reuse the app's standard modal shell (overlay → modal → head/body/foot) so
+  // this dialog looks and behaves like the model/settings pickers instead of the
+  // old unstyled settings-overlay/settings-box (which had no CSS and broke layout).
+  const overlay = el('div', 'modal-overlay');
   overlay.id = 'gitConnectOverlay';
-  overlay.style.display = 'flex';
-  const box = el('div', 'settings-box');
-  box.style.maxWidth = '440px';
-  const title = el('h2', null, '🔗 ' + t('connectGit'));
-  const desc = el('p', null, t('connectGitDesc'));
-  desc.style.fontSize = '13px';
-  desc.style.opacity = '0.8';
+  const modal = el('div', 'modal');
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+
+  const head = el('div', 'modal-head');
+  const htext = el('div');
+  htext.appendChild(el('h2', null, '🔗 ' + t('connectGit')));
+  htext.appendChild(el('p', 'modal-sub', t('connectGitDesc')));
+  const closeX = el('button', 'modal-close', '✕');
+  closeX.title = t('close');
+  closeX.addEventListener('click', () => overlay.remove());
+  head.appendChild(htext);
+  head.appendChild(closeX);
+
+  const bodyEl = el('div', 'modal-body');
   const inp = el('input', 'field-input');
   inp.placeholder = t('gitUrlPlaceholder');
-  inp.style.marginTop = '12px';
-  inp.style.width = '100%';
+  inp.dir = 'ltr';
   const errDiv = el('div', 'repo-err');
   errDiv.style.display = 'none';
-  const foot = el('div', 'settings-foot');
+  bodyEl.appendChild(inp);
+  bodyEl.appendChild(errDiv);
+
+  const foot = el('div', 'modal-foot');
   const cancelBtn = el('button', 'mini-btn', t('close'));
   cancelBtn.addEventListener('click', () => overlay.remove());
   const submitBtn = el('button', 'send', t('connectAndPush'));
-  submitBtn.addEventListener('click', async () => {
+  const doSubmit = async () => {
     const url = inp.value.trim();
     if (!url) return;
     submitBtn.disabled = true;
@@ -1177,15 +1190,17 @@ function showGitConnectDialog(localDir) {
       if (res && res.ok) { overlay.remove(); renderRepo(res); }
       else { errDiv.textContent = t('error') + (res && res.error || ''); errDiv.style.display = 'block'; submitBtn.disabled = false; submitBtn.textContent = t('connectAndPush'); }
     } catch (e) { errDiv.textContent = e.message; errDiv.style.display = 'block'; submitBtn.disabled = false; submitBtn.textContent = t('connectAndPush'); }
-  });
+  };
+  submitBtn.addEventListener('click', doSubmit);
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSubmit(); });
   foot.appendChild(cancelBtn);
   foot.appendChild(submitBtn);
-  box.appendChild(title);
-  box.appendChild(desc);
-  box.appendChild(inp);
-  box.appendChild(errDiv);
-  box.appendChild(foot);
-  overlay.appendChild(box);
+
+  modal.appendChild(head);
+  modal.appendChild(bodyEl);
+  modal.appendChild(foot);
+  overlay.appendChild(modal);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
   document.body.appendChild(overlay);
   inp.focus();
 }
