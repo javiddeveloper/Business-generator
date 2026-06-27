@@ -18,4 +18,4 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       # همان دیتای فعلی n8n-lab → ورک‌فلوهای import‌شده حفظ می‌شوند
-      - /Users/mac/n8n-lab/data:/home/node/.n8n
+      - /Users/javid/n8n-lab/data:/home/node/.n8n
