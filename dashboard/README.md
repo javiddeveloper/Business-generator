@@ -1,5 +1,7 @@
 # ⚡ Mission Control — Dashboard
 
+![Dashboard screenshot](docs/screenshot.png)
+
 A dark, real-time cockpit for the autonomous startup system. It shows the live
 Trello board, GitHub PRs with CI status, a SOLO-style activity/chat timeline,
 and a command composer that gives you the **full Bale command set without Bale**.
